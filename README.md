@@ -32,9 +32,9 @@ A native RSS and Atom reader for the Omarchy bar, with OPML import/export, categ
 
 ![RSS-Reeder category drawer](docs/screenshots/categories.png)
 
-### Subscription Management
+### OPML Import & Export
 
-![RSS-Reeder subscriptions](docs/screenshots/subscriptions.png)
+![RSS-Reeder OPML import and export](docs/screenshots/opml.png)
 
 ### Settings
 
