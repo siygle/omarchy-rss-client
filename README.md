@@ -30,15 +30,30 @@ A native RSS and Atom reader for the Omarchy bar, with OPML import/export, categ
 
 ### Categories
 
+<details>
+<summary>View screenshot</summary>
+
 ![RSS-Reeder category drawer](docs/screenshots/categories.png)
+
+</details>
 
 ### OPML Import & Export
 
+<details>
+<summary>View screenshot</summary>
+
 ![RSS-Reeder OPML import and export](docs/screenshots/opml.png)
+
+</details>
 
 ### Settings
 
+<details>
+<summary>View screenshot</summary>
+
 ![RSS-Reeder settings](docs/screenshots/settings.png)
+
+</details>
 
 ---
 
