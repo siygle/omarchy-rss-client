@@ -129,52 +129,32 @@ Item {
     anchors.top: parent.top
     anchors.left: parent.left
     anchors.right: parent.right
-    height: Style.space(26)
+    height: Style.space(30)
 
-    // App Title & Badge (left)
-    Row {
+    // Status Metadata (left-aligned)
+    Text {
       anchors.left: parent.left
       anchors.verticalCenter: parent.verticalCenter
-      spacing: Style.space(6)
-
-      Text {
-        text: "󰑫"
-        font.family: root.contentFontFamily
-        font.pixelSize: Style.font.subtitle
-        font.bold: true
-        color: Color.accent
+      text: {
+        var subCount = (root.subscriptions || []).length
+        return subCount + (subCount === 1 ? " feed" : " feeds") + " · " + root.totalUnreadCount + " unread"
       }
-
-      Text {
-        text: "RSS-Reeder"
-        font.family: root.contentFontFamily
-        font.pixelSize: Style.font.subtitle
-        font.bold: true
-        color: root.contentForeground
-      }
-
-      Text {
-        anchors.verticalCenter: parent.verticalCenter
-        text: {
-          var subCount = (root.subscriptions || []).length
-          return subCount + (subCount === 1 ? " feed" : " feeds") + " · " + root.totalUnreadCount + " unread"
-        }
-        font.family: root.contentFontFamily
-        font.pixelSize: Style.font.caption
-        color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.45)
-      }
+      font.family: root.contentFontFamily
+      font.pixelSize: Style.font.caption
+      font.bold: true
+      color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.55)
     }
 
-    // Actions (Refresh & Settings) (right)
+    // Actions (Refresh & Settings) (right) - scaled ~15%
     Row {
       anchors.right: parent.right
       anchors.verticalCenter: parent.verticalCenter
-      spacing: Style.space(2)
+      spacing: Style.space(3)
 
       // Refresh action
       Rectangle {
-        width: Style.space(26)
-        height: Style.space(26)
+        width: Style.space(30)
+        height: Style.space(30)
         radius: Style.space(4)
         color: refreshHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent"
 
@@ -182,7 +162,7 @@ Item {
           anchors.centerIn: parent
           text: "󰑐"
           font.family: root.contentFontFamily
-          font.pixelSize: Style.font.body
+          font.pixelSize: Math.round(Style.font.body * 1.15)
           color: root.contentForeground
         }
 
@@ -197,8 +177,8 @@ Item {
 
       // Settings action
       Rectangle {
-        width: Style.space(26)
-        height: Style.space(26)
+        width: Style.space(30)
+        height: Style.space(30)
         radius: Style.space(4)
         color: settingsHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent"
 
@@ -206,7 +186,7 @@ Item {
           anchors.centerIn: parent
           text: "󰒓"
           font.family: root.contentFontFamily
-          font.pixelSize: Style.font.body
+          font.pixelSize: Math.round(Style.font.body * 1.15)
           color: root.contentForeground
         }
 
@@ -347,44 +327,13 @@ Item {
       }
     }
 
-    // Mark all read button (anchored right)
-    Rectangle {
-      id: markAllBtn
-      anchors.right: parent.right
-      anchors.verticalCenter: parent.verticalCenter
-      width: Style.space(26)
-      height: Style.space(26)
-      radius: Style.space(4)
-      color: markAllHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent"
-
-      Text {
-        anchors.centerIn: parent
-        text: "󰄬"
-        font.family: root.contentFontFamily
-        font.pixelSize: Style.font.body
-        color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.6)
-      }
-
-      MouseArea {
-        id: markAllHover
-        anchors.fill: parent
-        hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
-        onClicked: {
-          if (root.hostWidget && typeof root.hostWidget.markItemsRead === "function") {
-            root.hostWidget.markItemsRead(root.allFilteredArticles)
-          }
-        }
-      }
-    }
-
-    // Search Field (fills remaining width)
+    // Search Field (reclaims remaining width up to parent.right)
     SearchField {
       id: searchField
       anchors.left: toolbarLeft.right
       anchors.leftMargin: Style.space(6)
-      anchors.right: markAllBtn.left
-      anchors.rightMargin: Style.space(6)
+      anchors.right: parent.right
+      anchors.rightMargin: 0
       anchors.verticalCenter: parent.verticalCenter
       contentForeground: root.contentForeground
       contentFontFamily: root.contentFontFamily
