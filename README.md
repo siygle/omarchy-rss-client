@@ -169,6 +169,13 @@ No additional third-party dependencies need to be installed.
 - **Native Execution**: Like all Omarchy plugins, code executes locally with user permissions.
 
 ---
+## Acknowledgements
+
+RSS-Reeder was inspired by [rafaelvzago/omarchy-rss-plugin](https://github.com/rafaelvzago/omarchy-rss-plugin), which provided useful reference points for building an RSS reader as an Omarchy bar plugin.
+
+RSS-Reeder has since evolved with its own UI, category workflow, OPML import/export flow, subscription management, retention controls, and other functionality.
+
+Thanks to Rafael Vzago for publishing the original project and making it available as open source.
 
 ## License & Acknowledgements
 
