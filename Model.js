@@ -181,17 +181,103 @@ function sharePayload(urls) {
   })
 }
 
-function parseOpml(text) {
+function filePathFromUrl(urlOrPath) {
+  var raw = String(urlOrPath || "").trim()
+  if (!raw) return ""
+  if (/^file:\/\//i.test(raw)) {
+    var pathOnly = raw.replace(/^file:\/\/(localhost)?/i, "")
+    try {
+      return decodeURIComponent(pathOnly)
+    } catch (e) {
+      return pathOnly
+    }
+  }
+  return raw
+}
+
+function filenameFromPath(filePath) {
+  var raw = String(filePath || "").trim()
+  if (!raw) return ""
+  return raw.replace(/^.*[\\\/]/, "")
+}
+
+function parseOpmlDetails(text) {
   var raw = String(text || "").trim()
-  if (!raw) return []
-  var fromOpml = []
+  if (!raw) return { feeds: [], invalidCount: 0, totalFound: 0 }
+  var valid = []
+  var invalid = 0
+  var total = 0
   var re = /xmlUrl\s*=\s*["']([^"']+)["']/gi
   var match
   while ((match = re.exec(raw))) {
+    total++
     var url = decodeEntities(match[1]).trim()
-    if (url) fromOpml.push(url)
+    if (isHttpsUrl(url)) {
+      valid.push(url)
+    } else {
+      invalid++
+    }
   }
-  return httpsFeedUrls(fromOpml)
+  return {
+    feeds: valid,
+    invalidCount: invalid,
+    totalFound: total
+  }
+}
+
+function parseOpml(text) {
+  return parseOpmlDetails(text).feeds
+}
+
+function calculateImportResult(currentFeeds, parsedResult, filename) {
+  var current = httpsFeedUrls(currentFeeds)
+  var incoming = []
+  var invalidCount = 0
+  if (parsedResult && typeof parsedResult === "object" && parsedResult.feeds) {
+    incoming = httpsFeedUrls(parsedResult.feeds)
+    invalidCount = typeof parsedResult.invalidCount === "number" ? parsedResult.invalidCount : 0
+  } else {
+    incoming = httpsFeedUrls(parsedResult)
+  }
+  var incomingUnique = []
+  for (var i = 0; i < incoming.length; i++) {
+    if (incomingUnique.indexOf(incoming[i]) === -1) incomingUnique.push(incoming[i])
+  }
+  var added = []
+  var duplicates = 0
+  for (var j = 0; j < incomingUnique.length; j++) {
+    if (current.indexOf(incomingUnique[j]) === -1) {
+      added.push(incomingUnique[j])
+    } else {
+      duplicates++
+    }
+  }
+  var nameLabel = filename ? (" from " + filename) : ""
+  var parts = []
+  if (added.length > 0) {
+    parts.push("Imported " + added.length + " feed" + (added.length === 1 ? "" : "s") + nameLabel)
+  } else if (duplicates > 0) {
+    parts.push("All " + duplicates + " feed" + (duplicates === 1 ? "" : "s") + nameLabel + " already added")
+  } else {
+    parts.push("No valid feeds found" + nameLabel)
+  }
+  if (duplicates > 0 && added.length > 0) {
+    parts.push(duplicates + " duplicate" + (duplicates === 1 ? "" : "s"))
+  }
+  if (invalidCount > 0) {
+    parts.push(invalidCount + " need attention")
+  }
+  var message = parts.join(" · ")
+  var nextFeeds = current.slice()
+  for (var k = 0; k < added.length; k++) nextFeeds.push(added[k])
+  return {
+    status: (added.length > 0 || duplicates > 0) ? "success" : "error",
+    imported: added.length,
+    duplicates: duplicates,
+    invalid: invalidCount,
+    message: message,
+    newFeeds: nextFeeds
+  }
 }
 
 function parseSharePayload(text) {
@@ -615,7 +701,11 @@ if (typeof module !== "undefined" && module.exports) {
     serializeFeedUrls: serializeFeedUrls,
     addFeedUrl: addFeedUrl,
     sharePayload: sharePayload,
+    filePathFromUrl: filePathFromUrl,
+    filenameFromPath: filenameFromPath,
+    parseOpmlDetails: parseOpmlDetails,
     parseOpml: parseOpml,
+    calculateImportResult: calculateImportResult,
     parseSharePayload: parseSharePayload,
     mergeFeedLists: mergeFeedLists,
     removeFeedUrl: removeFeedUrl,

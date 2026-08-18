@@ -26,10 +26,20 @@ The RSS plugin is structured into three primary layers:
 
 ## OPML Import Feature
 
-- **UI**: Located in the Settings -> Share tab with an **Import OPML file** action button and a text input for pasting OPML or URL lists.
-- **File Selection**: Invokes `omarchy-file-select --title "Select OPML file" --extensions "opml xml"` via desktop portal integration.
-- **Feed Management**: Extracts all `xmlUrl` attributes (flat or nested in folder outlines), filters to HTTPS-only URLs, and merges them with existing feed URLs without duplicates.
-- **Persistence**: Automatically persists merged feed lists to plugin settings and triggers an immediate fetch of all configured feeds.
+- **Architecture & Ownership**:
+  - The persistent import controller lives in `BarWidget.qml`, surviving transient popup closes or focus changes.
+  - `Panel.qml` only emits import requests via `root.hostWidget.requestOpmlFileImport()` and displays the persisted `lastImportResult` / `shareStatus`.
+- **File Selection & URL Handling**:
+  - Invokes `omarchy-file-select --title "Select OPML file" --extensions "opml xml"` via desktop portal integration.
+  - Decodes `file://` URLs and percent-encoded paths (including spaces, `#`, `%`, parentheses, and Unicode) via `Model.filePathFromUrl()`.
+- **File Validation & Security**:
+  - Validates that the selected path is a single regular file (rejects directories, devices, and special files).
+  - Enforces a 5 MiB file size limit before reading.
+  - Safely reads file contents using a non-blocking process without shell interpolation.
+- **Feed Management & Persistence**:
+  - Extracts all `xmlUrl` attributes (flat or nested in folder outlines), filters to HTTPS-only URLs, and merges them with existing feed URLs without duplicates.
+  - Automatically persists merged feed lists to plugin settings, updates `lastImportResult`, and triggers an immediate fetch of all configured feeds.
+  - Restores the last import result message when Settings is reopened.
 - **Verification**: Validates runtime QML, syntax checking with `qmllint`, manifest validation with `omarchy plugin validate .`, and unit test coverage via `node --test tests/*.mjs`.
 
 ## Development & Testing

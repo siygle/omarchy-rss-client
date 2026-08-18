@@ -33,7 +33,6 @@ Panel {
   property string importText: ""
   property string shareStatus: ""
   property string filterText: ""
-  property string localSelectedOpmlPath: ""
 
   readonly property var barIdentity: hostWidget || root
   readonly property color contentForeground: bar ? bar.foreground : Color.foreground
@@ -78,6 +77,8 @@ Panel {
     return false
   }
 
+  property var lastImportResult: null
+
   function openSettings() {
     root.draftUrl = ""
     root.draftPoll = String(root.pollIntervalMinutes)
@@ -85,7 +86,8 @@ Panel {
     root.draftPageSize = String(root.itemsPerPage)
     root.draftSection = Model.barSection(root.barSection)
     root.importText = ""
-    root.shareStatus = ""
+    root.feedUrls = Model.httpsFeedUrls(Model.serializeFeedUrls(root.hostWidget ? root.hostWidget.configuredFeedUrls : root.feedUrls))
+    root.shareStatus = (root.hostWidget && root.hostWidget.lastImportMessage) ? root.hostWidget.lastImportMessage : ""
     root.settingsTab = "feeds"
     root.showingSettings = true
   }
@@ -133,76 +135,32 @@ Panel {
   }
 
   function importSharedFeeds() {
-    var incoming = Model.parseSharePayload(root.importText)
-    if (!incoming.length) {
-      root.shareStatus = "Nothing to import"
-      return
-    }
-    var prevCount = root.feedUrls ? root.feedUrls.length : 0
-    root.feedUrls = Model.mergeFeedLists(root.feedUrls, incoming)
-    var addedCount = root.feedUrls.length - prevCount
-    if (root.hostWidget && typeof root.hostWidget.importFeeds === "function")
-      root.hostWidget.importFeeds(root.feedUrls)
+    var text = String(root.importText || "").trim()
     root.importText = ""
-    root.shareStatus = addedCount > 0
-      ? ("Imported " + addedCount + " new " + (addedCount === 1 ? "feed" : "feeds"))
-      : ("All " + incoming.length + " feeds already added")
-  }
-
-  function importOpmlContent(content, filename) {
-    var incoming = Model.parseSharePayload(content)
-    if (!incoming.length) {
-      root.shareStatus = filename ? ("No feeds found in " + filename) : "No feeds found"
-      return
+    if (root.hostWidget && typeof root.hostWidget.importSharedPayload === "function") {
+      root.hostWidget.importSharedPayload(text)
+    } else {
+      var incoming = Model.parseSharePayload(text)
+      if (!incoming.length) {
+        root.shareStatus = "Nothing to import"
+        return
+      }
+      var prevCount = root.feedUrls ? root.feedUrls.length : 0
+      root.feedUrls = Model.mergeFeedLists(root.feedUrls, incoming)
+      var addedCount = root.feedUrls.length - prevCount
+      if (root.hostWidget && typeof root.hostWidget.importFeeds === "function")
+        root.hostWidget.importFeeds(root.feedUrls)
+      root.shareStatus = addedCount > 0
+        ? ("Imported " + addedCount + " new " + (addedCount === 1 ? "feed" : "feeds"))
+        : ("All " + incoming.length + " feeds already added")
     }
-    var prevCount = root.feedUrls ? root.feedUrls.length : 0
-    root.feedUrls = Model.mergeFeedLists(root.feedUrls, incoming)
-    var addedCount = root.feedUrls.length - prevCount
-    if (root.hostWidget && typeof root.hostWidget.importFeeds === "function")
-      root.hostWidget.importFeeds(root.feedUrls)
-    var nameLabel = filename ? (" from " + filename) : ""
-    root.shareStatus = addedCount > 0
-      ? ("Imported " + addedCount + " new " + (addedCount === 1 ? "feed" : "feeds") + nameLabel)
-      : ("All " + incoming.length + " feeds" + nameLabel + " already added")
   }
 
   function selectOpmlFile() {
-    if (root.hostWidget && typeof root.hostWidget.selectOpmlFile === "function") {
+    if (root.hostWidget && typeof root.hostWidget.requestOpmlFileImport === "function") {
+      root.hostWidget.requestOpmlFileImport()
+    } else if (root.hostWidget && typeof root.hostWidget.selectOpmlFile === "function") {
       root.hostWidget.selectOpmlFile()
-    } else {
-      if (!localSelectProcess.running && !localReadProcess.running) {
-        root.localSelectedOpmlPath = ""
-        localSelectProcess.running = true
-      }
-    }
-  }
-
-  Process {
-    id: localSelectProcess
-    command: ["omarchy-file-select", "--title", "Select OPML file", "--extensions", "opml xml"]
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: function(text) {
-        var path = String(text || "").trim()
-        if (path) root.localSelectedOpmlPath = path
-      }
-    }
-    onExited: function(exitCode) {
-      if (exitCode === 0 && root.localSelectedOpmlPath) {
-        localReadProcess.command = ["cat", root.localSelectedOpmlPath]
-        localReadProcess.running = true
-      }
-    }
-  }
-
-  Process {
-    id: localReadProcess
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: function(text) {
-        var filename = root.localSelectedOpmlPath ? root.localSelectedOpmlPath.split("/").pop() : ""
-        root.importOpmlContent(text, filename)
-      }
     }
   }
 

@@ -63,6 +63,8 @@ BarWidget {
     if ("itemsPerPage" in target) target.itemsPerPage = root.configuredItemsPerPage
     if ("barSection" in target) target.barSection = root.configuredBarSection
     if ("readSet" in target) target.readSet = root.readSet
+    if ("lastImportResult" in target) target.lastImportResult = root.lastImportResult
+    if ("shareStatus" in target && root.lastImportMessage) target.shareStatus = root.lastImportMessage
   }
 
   function persistSettings(values) {
@@ -95,12 +97,82 @@ BarWidget {
       root.bar.run("omarchy bar move " + root.moduleName + " --section " + next)
   }
 
+  property var lastImportResult: null
+  property string lastImportMessage: ""
   property string selectedOpmlPath: ""
 
-  function selectOpmlFile() {
-    if (opmlSelectProcess.running || opmlReadProcess.running) return
+  function requestOpmlFileImport() {
+    if (opmlSelectProcess.running || opmlValidateAndReadProcess.running) return
     root.selectedOpmlPath = ""
+    console.log("[RSS] requestOpmlFileImport: opening file selector")
     opmlSelectProcess.running = true
+  }
+
+  function selectOpmlFile() {
+    root.requestOpmlFileImport()
+  }
+
+  function handleSelectedOpmlFile(fileUrlOrPath) {
+    var raw = String(fileUrlOrPath || "").trim()
+    if (!raw) return
+    var resolvedPath = Model.filePathFromUrl(raw)
+    if (!resolvedPath) return
+    console.log("[RSS] handleSelectedOpmlFile: reading file:", resolvedPath)
+    root.selectedOpmlPath = resolvedPath
+    opmlValidateAndReadProcess.sourcePath = resolvedPath
+    opmlValidateAndReadProcess.command = [
+      "python3", "-c",
+      "import os, sys\n" +
+      "path = sys.argv[1]\n" +
+      "if not os.path.exists(path):\n" +
+      "    sys.stderr.write('File not found\\n')\n" +
+      "    sys.exit(1)\n" +
+      "if os.path.isdir(path):\n" +
+      "    sys.stderr.write('Selected path is a directory\\n')\n" +
+      "    sys.exit(2)\n" +
+      "if not os.path.isfile(path):\n" +
+      "    sys.stderr.write('Selected path is not a regular file\\n')\n" +
+      "    sys.exit(3)\n" +
+      "size = os.path.getsize(path)\n" +
+      "if size > 5242880:\n" +
+      "    sys.stderr.write('File exceeds 5 MiB limit\\n')\n" +
+      "    sys.exit(4)\n" +
+      "with open(path, 'rb') as f:\n" +
+      "    sys.stdout.buffer.write(f.read())\n",
+      resolvedPath
+    ]
+    opmlValidateAndReadProcess.running = true
+  }
+
+  function importSharedPayload(payloadText) {
+    var raw = String(payloadText || "").trim()
+    if (!raw) {
+      root.lastImportMessage = "Nothing to import"
+      root.lastImportResult = { status: "error", imported: 0, duplicates: 0, invalid: 0, message: "Nothing to import" }
+      if (panelLoader.item) {
+        panelLoader.item.shareStatus = "Nothing to import"
+        panelLoader.item.lastImportResult = root.lastImportResult
+      }
+      return
+    }
+    var parseDetails = Model.parseOpmlDetails(raw)
+    if (!parseDetails.feeds.length) {
+      var parsed = Model.parseSharePayload(raw)
+      parseDetails = { feeds: parsed, invalidCount: 0, totalFound: parsed.length }
+    }
+    var result = Model.calculateImportResult(root.configuredFeedUrls, parseDetails, "")
+    root.lastImportResult = result
+    root.lastImportMessage = result.message
+    if (result.status === "success" && result.imported > 0) {
+      persistSettings({ feedUrls: Model.serializeFeedUrls(result.newFeeds) })
+      fetchFeed()
+    }
+    if (panelLoader.item) {
+      panelLoader.item.feedUrls = Model.httpsFeedUrls(Model.serializeFeedUrls(root.configuredFeedUrls))
+      panelLoader.item.shareStatus = result.message
+      panelLoader.item.lastImportResult = result
+    }
+    injectPanel()
   }
 
   function shareFeeds(urls) {
@@ -343,28 +415,63 @@ BarWidget {
       }
     }
     onExited: function(exitCode) {
+      console.log("[RSS] opmlSelectProcess exited with code:", exitCode, "path:", root.selectedOpmlPath)
       if (exitCode === 0 && root.selectedOpmlPath) {
-        opmlReadProcess.command = ["cat", root.selectedOpmlPath]
-        opmlReadProcess.running = true
+        root.handleSelectedOpmlFile(root.selectedOpmlPath)
       }
     }
   }
 
   Process {
-    id: opmlReadProcess
+    id: opmlValidateAndReadProcess
+    property string sourcePath: ""
     stdout: StdioCollector {
+      id: opmlStdout
       waitForEnd: true
-      onStreamFinished: function(text) {
-        var filename = root.selectedOpmlPath ? root.selectedOpmlPath.split("/").pop() : ""
-        if (panelLoader.item && typeof panelLoader.item.importOpmlContent === "function") {
-          panelLoader.item.importOpmlContent(text, filename)
-        } else {
-          var incoming = Model.parseSharePayload(text)
-          if (incoming.length) {
-            root.importFeeds(Model.mergeFeedLists(root.configuredFeedUrls, incoming))
-          }
+    }
+    stderr: StdioCollector {
+      id: opmlStderr
+      waitForEnd: true
+    }
+    onExited: function(exitCode) {
+      console.log("[RSS] opmlValidateAndReadProcess exited with code:", exitCode)
+      if (exitCode !== 0) {
+        var err = String(opmlStderr.text || "").trim() || "Failed to read file"
+        root.lastImportResult = {
+          status: "error",
+          imported: 0,
+          duplicates: 0,
+          invalid: 0,
+          message: err
         }
+        root.lastImportMessage = err
+        if (panelLoader.item) {
+          panelLoader.item.shareStatus = err
+          panelLoader.item.lastImportResult = root.lastImportResult
+        }
+        return
       }
+      var content = String(opmlStdout.text || "")
+      var filename = Model.filenameFromPath(opmlValidateAndReadProcess.sourcePath)
+      var parseDetails = Model.parseOpmlDetails(content)
+      if (!parseDetails.feeds.length) {
+        var parsed = Model.parseSharePayload(content)
+        parseDetails = { feeds: parsed, invalidCount: 0, totalFound: parsed.length }
+      }
+      var result = Model.calculateImportResult(root.configuredFeedUrls, parseDetails, filename)
+      console.log("[RSS] import completed:", JSON.stringify(result))
+      root.lastImportResult = result
+      root.lastImportMessage = result.message
+      if (result.status === "success" && result.imported > 0) {
+        persistSettings({ feedUrls: Model.serializeFeedUrls(result.newFeeds) })
+        fetchFeed()
+      }
+      if (panelLoader.item) {
+        panelLoader.item.feedUrls = Model.httpsFeedUrls(Model.serializeFeedUrls(root.configuredFeedUrls))
+        panelLoader.item.shareStatus = result.message
+        panelLoader.item.lastImportResult = result
+      }
+      injectPanel()
     }
   }
 

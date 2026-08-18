@@ -1,6 +1,115 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import Model from "../Model.js";
+
+test("filePathFromUrl handles file URLs with spaces, parens, unicode, # and %", () => {
+  assert.equal(
+    Model.filePathFromUrl("file:///home/user/Downloads/subscriptions.opml"),
+    "/home/user/Downloads/subscriptions.opml"
+  );
+  assert.equal(
+    Model.filePathFromUrl("file:///home/user/My%20Folder%20(1)/sub%231%25.opml"),
+    "/home/user/My Folder (1)/sub#1%.opml"
+  );
+  assert.equal(
+    Model.filePathFromUrl("file:///home/user/%E6%96%B0%E9%97%BB/feeds.opml"),
+    "/home/user/新闻/feeds.opml"
+  );
+  assert.equal(
+    Model.filePathFromUrl("/home/user/My Folder (1)/test#1%.opml"),
+    "/home/user/My Folder (1)/test#1%.opml"
+  );
+  assert.equal(Model.filePathFromUrl(""), "");
+  assert.equal(Model.filePathFromUrl(null), "");
+});
+
+test("filenameFromPath extracts the basename cleanly", () => {
+  assert.equal(Model.filenameFromPath("/home/user/Downloads/subs.opml"), "subs.opml");
+  assert.equal(Model.filenameFromPath("subs.opml"), "subs.opml");
+  assert.equal(Model.filenameFromPath(""), "");
+});
+
+test("parseOpmlDetails returns structured feed counts and HTTPS feeds", () => {
+  const opml = `<?xml version="1.0"?>
+<opml version="2.0">
+  <body>
+    <outline text="Feed 1" xmlUrl="https://example.com/feed1.xml"/>
+    <outline text="Feed 2" xmlUrl="https://example.com/feed2.xml?a=1&amp;b=2"/>
+    <outline text="Insecure" xmlUrl="http://insecure.example.com/feed"/>
+    <outline text="Invalid" xmlUrl="not-a-url"/>
+  </body>
+</opml>`;
+
+  const details = Model.parseOpmlDetails(opml);
+  assert.equal(details.totalFound, 4);
+  assert.equal(details.invalidCount, 2);
+  assert.deepEqual(details.feeds, [
+    "https://example.com/feed1.xml",
+    "https://example.com/feed2.xml?a=1&b=2",
+  ]);
+});
+
+test("calculateImportResult generates expected report and messages", () => {
+  const current = ["https://dup.example/rss"];
+  const details = {
+    feeds: [
+      "https://dup.example/rss",
+      "https://new1.example/rss",
+      "https://new2.example/rss",
+    ],
+    invalidCount: 2,
+    totalFound: 5,
+  };
+
+  const res = Model.calculateImportResult(current, details, "feeds.opml");
+  assert.equal(res.status, "success");
+  assert.equal(res.imported, 2);
+  assert.equal(res.duplicates, 1);
+  assert.equal(res.invalid, 2);
+  assert.equal(res.message, "Imported 2 feeds from feeds.opml · 1 duplicate · 2 need attention");
+  assert.deepEqual(res.newFeeds, [
+    "https://dup.example/rss",
+    "https://new1.example/rss",
+    "https://new2.example/rss",
+  ]);
+});
+
+test("calculateImportResult handles all duplicates", () => {
+  const current = ["https://a.example/rss", "https://b.example/rss"];
+  const details = {
+    feeds: ["https://a.example/rss", "https://b.example/rss"],
+    invalidCount: 0,
+    totalFound: 2,
+  };
+
+  const res = Model.calculateImportResult(current, details, "subs.opml");
+  assert.equal(res.status, "success");
+  assert.equal(res.imported, 0);
+  assert.equal(res.duplicates, 2);
+  assert.equal(res.invalid, 0);
+  assert.equal(res.message, "All 2 feeds from subs.opml already added");
+});
+
+test("calculateImportResult handles no valid feeds found", () => {
+  const current = ["https://a.example/rss"];
+  const details = {
+    feeds: [],
+    invalidCount: 2,
+    totalFound: 2,
+  };
+
+  const res = Model.calculateImportResult(current, details, "bad.opml");
+  assert.equal(res.status, "error");
+  assert.equal(res.imported, 0);
+  assert.equal(res.duplicates, 0);
+  assert.equal(res.invalid, 2);
+  assert.equal(res.message, "No valid feeds found from bad.opml · 2 need attention");
+});
 
 test("parseOpml parses simple flat OPML with xmlUrl attributes", () => {
   const opml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -108,4 +217,162 @@ test("parseSharePayload seamlessly handles OPML as well as JSON and plain text",
     "https://plain1.example/rss",
     "https://plain2.example/feed.xml",
   ]);
+});
+
+test("persistent import lifecycle simulation survives panel close/recreation", () => {
+  // Simulate persistent widget state
+  let configuredFeedUrls = ["https://initial.example/feed.xml"];
+  let lastImportResult = null;
+  let lastImportMessage = "";
+
+  // 1. User opens panel & settings
+  let panelShowing = true;
+
+  // 2. User clicks import OPML -> native dialog opens, panel closes
+  panelShowing = false;
+
+  // 3. User selects file on desktop
+  const selectedFilePath = "file:///home/user/My%20Folder%20(2026)/subs%231.opml";
+  const resolvedPath = Model.filePathFromUrl(selectedFilePath);
+  assert.equal(resolvedPath, "/home/user/My Folder (2026)/subs#1.opml");
+  const filename = Model.filenameFromPath(resolvedPath);
+  assert.equal(filename, "subs#1.opml");
+
+  // 4. Persistent controller reads & parses OPML while panel is closed
+  const opmlContent = `<?xml version="1.0"?>
+  <opml version="2.0">
+    <body>
+      <outline text="Initial" xmlUrl="https://initial.example/feed.xml"/>
+      <outline text="New Feed" xmlUrl="https://new.example/rss.xml"/>
+      <outline text="Insecure" xmlUrl="http://insecure.example/rss"/>
+    </body>
+  </opml>`;
+
+  const details = Model.parseOpmlDetails(opmlContent);
+  const result = Model.calculateImportResult(configuredFeedUrls, details, filename);
+
+  // 5. Persistent controller updates stored feeds and import result
+  lastImportResult = result;
+  lastImportMessage = result.message;
+  if (result.status === "success" && result.imported > 0) {
+    configuredFeedUrls = result.newFeeds;
+  }
+
+  assert.deepEqual(configuredFeedUrls, [
+    "https://initial.example/feed.xml",
+    "https://new.example/rss.xml",
+  ]);
+  assert.equal(lastImportResult.imported, 1);
+  assert.equal(lastImportResult.duplicates, 1);
+  assert.equal(lastImportResult.invalid, 1);
+
+  // 6. User reopens RSS panel and Settings later
+  panelShowing = true;
+  // Panel initializes its draft feeds and status from hostWidget
+  const panelFeeds = Model.httpsFeedUrls(configuredFeedUrls);
+  const panelShareStatus = lastImportMessage;
+
+  assert.deepEqual(panelFeeds, [
+    "https://initial.example/feed.xml",
+    "https://new.example/rss.xml",
+  ]);
+  assert.equal(
+    panelShareStatus,
+    "Imported 1 feed from subs#1.opml · 1 duplicate · 1 need attention"
+  );
+});
+
+test("file reader rejects oversized files > 5 MiB, directories, and non-files", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "rss-test-"));
+  try {
+    const validFile = path.join(tmpDir, "valid.opml");
+    fs.writeFileSync(validFile, `<opml version="2.0"><body><outline xmlUrl="https://test.example/feed.xml"/></body></opml>`);
+
+    const specialDir = path.join(tmpDir, "folder (2026)");
+    fs.mkdirSync(specialDir);
+    const specialFile = path.join(specialDir, "subs#1%.opml");
+    fs.writeFileSync(specialFile, `<opml version="2.0"><body><outline xmlUrl="https://special.example/feed.xml"/></body></opml>`);
+
+    const overFile = path.join(tmpDir, "oversized.opml");
+    fs.writeFileSync(overFile, Buffer.alloc(5.5 * 1024 * 1024, 65));
+
+    const emptyFile = path.join(tmpDir, "empty.opml");
+    fs.writeFileSync(emptyFile, "");
+
+    const invalidXmlFile = path.join(tmpDir, "invalid.opml");
+    fs.writeFileSync(invalidXmlFile, "Plain text not xml");
+
+    function runReader(filePath) {
+      try {
+        const stdout = execFileSync("python3", [
+          "-c",
+          "import os, sys\n" +
+          "path = sys.argv[1]\n" +
+          "if not os.path.exists(path):\n" +
+          "    sys.stderr.write('File not found\\n')\n" +
+          "    sys.exit(1)\n" +
+          "if os.path.isdir(path):\n" +
+          "    sys.stderr.write('Selected path is a directory\\n')\n" +
+          "    sys.exit(2)\n" +
+          "if not os.path.isfile(path):\n" +
+          "    sys.stderr.write('Selected path is not a regular file\\n')\n" +
+          "    sys.exit(3)\n" +
+          "size = os.path.getsize(path)\n" +
+          "if size > 5242880:\n" +
+          "    sys.stderr.write('File exceeds 5 MiB limit\\n')\n" +
+          "    sys.exit(4)\n" +
+          "with open(path, 'rb') as f:\n" +
+          "    sys.stdout.buffer.write(f.read())\n",
+          filePath
+        ], { encoding: "utf-8" });
+        return { ok: true, stdout };
+      } catch (err) {
+        return { ok: false, status: err.status, stderr: err.stderr ? err.stderr.toString().trim() : "" };
+      }
+    }
+
+    // 1. Valid file
+    const validRes = runReader(validFile);
+    assert.equal(validRes.ok, true);
+    const details = Model.parseOpmlDetails(validRes.stdout);
+    const result = Model.calculateImportResult([], details, "valid.opml");
+    assert.equal(result.status, "success");
+    assert.equal(result.imported, 1);
+
+    // 2. Spaces, parens, # and % in path
+    const rawUrl = pathToFileURL(specialFile).href;
+    const resolvedSpecial = Model.filePathFromUrl(rawUrl);
+    assert.equal(resolvedSpecial, specialFile);
+    const specialRes = runReader(resolvedSpecial);
+    assert.equal(specialRes.ok, true);
+    assert.equal(Model.parseOpml(specialRes.stdout).length, 1);
+
+    // 3. Oversized file (> 5 MiB)
+    const overRes = runReader(overFile);
+    assert.equal(overRes.ok, false);
+    assert.equal(overRes.status, 4);
+    assert.match(overRes.stderr, /File exceeds 5 MiB limit/);
+
+    // 4. Directory
+    const dirRes = runReader(specialDir);
+    assert.equal(dirRes.ok, false);
+    assert.equal(dirRes.status, 2);
+    assert.match(dirRes.stderr, /Selected path is a directory/);
+
+    // 5. Empty file
+    const emptyRes = runReader(emptyFile);
+    assert.equal(emptyRes.ok, true);
+    const emptyResult = Model.calculateImportResult([], Model.parseOpmlDetails(emptyRes.stdout), "empty.opml");
+    assert.equal(emptyResult.status, "error");
+    assert.match(emptyResult.message, /No valid feeds found/);
+
+    // 6. Invalid XML
+    const invalidRes = runReader(invalidXmlFile);
+    assert.equal(invalidRes.ok, true);
+    const invalidResult = Model.calculateImportResult([], Model.parseOpmlDetails(invalidRes.stdout), "invalid.opml");
+    assert.equal(invalidResult.status, "error");
+    assert.match(invalidResult.message, /No valid feeds found/);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
 });
