@@ -181,5 +181,3 @@ Thanks to Rafael Vzago for publishing the original project and making it availab
 
 RSS-Reeder is licensed under the [MIT License](LICENSE).
 
-### Acknowledgements
-Originally inspired by and derived from the MIT-licensed Omarchy RSS plugin by Rafael Vzago.
