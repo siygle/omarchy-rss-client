@@ -123,444 +123,458 @@ Item {
     root.selectedIndex = 0
   }
 
-  Column {
-    anchors.fill: parent
-    spacing: Style.space(8)
+  // 1. Header Bar (anchored top)
+  Item {
+    id: headerBar
+    anchors.top: parent.top
+    anchors.left: parent.left
+    anchors.right: parent.right
+    height: Style.space(26)
 
-    // 1. Header Bar
-    Item {
-      width: parent.width
-      height: Style.space(32)
+    // App Title & Badge (left)
+    Row {
+      anchors.left: parent.left
+      anchors.verticalCenter: parent.verticalCenter
+      spacing: Style.space(6)
 
-      // App Title & Badge
-      Row {
-        anchors.left: parent.left
-        anchors.verticalCenter: parent.verticalCenter
-        spacing: Style.space(6)
-
-        Text {
-          text: "󰑫"
-          font.family: root.contentFontFamily
-          font.pixelSize: Style.font.subtitle
-          font.bold: true
-          color: Color.accent
-        }
-
-        Text {
-          text: "RSS"
-          font.family: root.contentFontFamily
-          font.pixelSize: Style.font.subtitle
-          font.bold: true
-          color: root.contentForeground
-        }
-
-        Text {
-          anchors.verticalCenter: parent.verticalCenter
-          text: {
-            var subCount = (root.subscriptions || []).length
-            return subCount + (subCount === 1 ? " feed" : " feeds") + " · " + root.totalUnreadCount + " unread"
-          }
-          font.family: root.contentFontFamily
-          font.pixelSize: Style.font.caption
-          color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.45)
-        }
+      Text {
+        text: "󰑫"
+        font.family: root.contentFontFamily
+        font.pixelSize: Style.font.subtitle
+        font.bold: true
+        color: Color.accent
       }
 
-      // Actions (Refresh & Settings)
-      Row {
-        anchors.right: parent.right
+      Text {
+        text: "RSS"
+        font.family: root.contentFontFamily
+        font.pixelSize: Style.font.subtitle
+        font.bold: true
+        color: root.contentForeground
+      }
+
+      Text {
         anchors.verticalCenter: parent.verticalCenter
-        spacing: Style.space(4)
-
-        // Refresh action
-        Rectangle {
-          width: Style.space(28)
-          height: Style.space(28)
-          radius: Style.space(4)
-          color: refreshHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent"
-
-          Text {
-            anchors.centerIn: parent
-            text: "󰑐"
-            font.family: root.contentFontFamily
-            font.pixelSize: Style.font.body
-            color: root.contentForeground
-          }
-
-          MouseArea {
-            id: refreshHover
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: root.refreshRequested()
-          }
+        text: {
+          var subCount = (root.subscriptions || []).length
+          return subCount + (subCount === 1 ? " feed" : " feeds") + " · " + root.totalUnreadCount + " unread"
         }
-
-        // Settings action
-        Rectangle {
-          width: Style.space(28)
-          height: Style.space(28)
-          radius: Style.space(4)
-          color: settingsHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent"
-
-          Text {
-            anchors.centerIn: parent
-            text: "󰒓"
-            font.family: root.contentFontFamily
-            font.pixelSize: Style.font.body
-            color: root.contentForeground
-          }
-
-          MouseArea {
-            id: settingsHover
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: root.openSettingsRequested()
-          }
-        }
+        font.family: root.contentFontFamily
+        font.pixelSize: Style.font.caption
+        color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.45)
       }
     }
 
-    // 2. Responsive Toolbar (Category toggle, Scope chip, Unread toggle, Search, Mark read)
-    Item {
-      width: parent.width
-      height: Style.space(30)
+    // Actions (Refresh & Settings) (right)
+    Row {
+      anchors.right: parent.right
+      anchors.verticalCenter: parent.verticalCenter
+      spacing: Style.space(2)
 
-      Row {
-        id: toolbarLeft
-        anchors.left: parent.left
-        anchors.verticalCenter: parent.verticalCenter
-        spacing: Style.space(6)
-
-        // Category Drawer Toggle (only if categories exist)
-        Rectangle {
-          visible: root.hasCategories
-          width: Style.space(28)
-          height: Style.space(28)
-          radius: Style.space(4)
-          color: root.drawerOpen
-            ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.2)
-            : (drawerHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent")
-          border.color: root.drawerOpen ? Color.accent : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.1)
-          border.width: 1
-
-          Text {
-            anchors.centerIn: parent
-            text: "󰍜"
-            font.family: root.contentFontFamily
-            font.pixelSize: Style.font.body
-            color: root.drawerOpen ? Color.accent : root.contentForeground
-          }
-
-          MouseArea {
-            id: drawerHover
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: root.toggleCategoryDrawer()
-          }
-        }
-
-        // Scope Pill Badge
-        Rectangle {
-          height: Style.space(26)
-          width: scopeText.implicitWidth + Style.space(14)
-          radius: Style.space(13)
-          color: root.currentCategory.toLowerCase() !== "all"
-            ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.14)
-            : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.05)
-          border.color: root.currentCategory.toLowerCase() !== "all" ? Color.accent : "transparent"
-          border.width: 1
-
-          Row {
-            anchors.centerIn: parent
-            spacing: Style.space(4)
-
-            Text {
-              id: scopeText
-              text: root.currentCategory.toLowerCase() === "all" ? "All feeds" : root.currentCategory
-              font.family: root.contentFontFamily
-              font.pixelSize: Style.font.caption
-              font.bold: true
-              color: root.currentCategory.toLowerCase() !== "all" ? Color.accent : root.contentForeground
-            }
-          }
-
-          MouseArea {
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: {
-              if (root.currentCategory.toLowerCase() !== "all") {
-                root.currentCategory = "all"
-              } else if (root.hasCategories) {
-                root.toggleCategoryDrawer()
-              }
-            }
-          }
-        }
-
-        // Unread-Only Toggle Chip
-        Rectangle {
-          height: Style.space(26)
-          width: unreadText.implicitWidth + Style.space(16)
-          radius: Style.space(13)
-          color: root.unreadOnly
-            ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.18)
-            : (unreadHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent")
-          border.color: root.unreadOnly ? Color.accent : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.12)
-          border.width: 1
-
-          Row {
-            anchors.centerIn: parent
-            spacing: Style.space(4)
-
-            Rectangle {
-              anchors.verticalCenter: parent.verticalCenter
-              width: Style.space(6)
-              height: width
-              radius: width / 2
-              color: Color.accent
-            }
-
-            Text {
-              id: unreadText
-              text: "Unread"
-              font.family: root.contentFontFamily
-              font.pixelSize: Style.font.caption
-              font.bold: root.unreadOnly
-              color: root.unreadOnly ? Color.accent : root.contentForeground
-            }
-          }
-
-          MouseArea {
-            id: unreadHover
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: root.unreadOnly = !root.unreadOnly
-          }
-        }
-      }
-
-      // Mark all read button (anchored right)
+      // Refresh action
       Rectangle {
-        id: markAllBtn
-        anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
-        width: Style.space(28)
-        height: Style.space(28)
+        width: Style.space(26)
+        height: Style.space(26)
         radius: Style.space(4)
-        color: markAllHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent"
+        color: refreshHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent"
 
         Text {
           anchors.centerIn: parent
-          text: "󰄬"
+          text: "󰑐"
           font.family: root.contentFontFamily
           font.pixelSize: Style.font.body
-          color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.6)
+          color: root.contentForeground
         }
 
         MouseArea {
-          id: markAllHover
+          id: refreshHover
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.refreshRequested()
+        }
+      }
+
+      // Settings action
+      Rectangle {
+        width: Style.space(26)
+        height: Style.space(26)
+        radius: Style.space(4)
+        color: settingsHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent"
+
+        Text {
+          anchors.centerIn: parent
+          text: "󰒓"
+          font.family: root.contentFontFamily
+          font.pixelSize: Style.font.body
+          color: root.contentForeground
+        }
+
+        MouseArea {
+          id: settingsHover
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.openSettingsRequested()
+        }
+      }
+    }
+  }
+
+  // 2. Responsive Toolbar (anchored below header)
+  Item {
+    id: toolbarBar
+    anchors.top: headerBar.bottom
+    anchors.topMargin: Style.space(6)
+    anchors.left: parent.left
+    anchors.right: parent.right
+    height: Style.space(28)
+
+    Row {
+      id: toolbarLeft
+      anchors.left: parent.left
+      anchors.verticalCenter: parent.verticalCenter
+      spacing: Style.space(4)
+
+      // Category Drawer Toggle (only if categories exist)
+      Rectangle {
+        visible: root.hasCategories
+        width: Style.space(26)
+        height: Style.space(26)
+        radius: Style.space(4)
+        color: root.drawerOpen
+          ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.2)
+          : (drawerHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent")
+        border.color: root.drawerOpen ? Color.accent : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.1)
+        border.width: 1
+
+        Text {
+          anchors.centerIn: parent
+          text: "󰍜"
+          font.family: root.contentFontFamily
+          font.pixelSize: Style.font.body
+          color: root.drawerOpen ? Color.accent : root.contentForeground
+        }
+
+        MouseArea {
+          id: drawerHover
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.toggleCategoryDrawer()
+        }
+      }
+
+      // Scope Pill Badge
+      Rectangle {
+        height: Style.space(24)
+        width: scopeText.implicitWidth + Style.space(12)
+        radius: Style.space(12)
+        color: root.currentCategory.toLowerCase() !== "all"
+          ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.14)
+          : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.05)
+        border.color: root.currentCategory.toLowerCase() !== "all" ? Color.accent : "transparent"
+        border.width: 1
+
+        Row {
+          anchors.centerIn: parent
+          spacing: Style.space(4)
+
+          Text {
+            id: scopeText
+            text: root.currentCategory.toLowerCase() === "all" ? "All feeds" : root.currentCategory
+            font.family: root.contentFontFamily
+            font.pixelSize: Style.font.caption
+            font.bold: true
+            color: root.currentCategory.toLowerCase() !== "all" ? Color.accent : root.contentForeground
+          }
+        }
+
+        MouseArea {
           anchors.fill: parent
           hoverEnabled: true
           cursorShape: Qt.PointingHandCursor
           onClicked: {
-            if (root.hostWidget && typeof root.hostWidget.markItemsRead === "function") {
-              root.hostWidget.markItemsRead(root.allFilteredArticles)
+            if (root.currentCategory.toLowerCase() !== "all") {
+              root.currentCategory = "all"
+            } else if (root.hasCategories) {
+              root.toggleCategoryDrawer()
             }
           }
         }
       }
 
-      // Search Field (expands responsively between left controls and right button)
-      SearchField {
-        id: searchField
-        anchors.left: toolbarLeft.right
-        anchors.leftMargin: Style.space(6)
-        anchors.right: markAllBtn.left
-        anchors.rightMargin: Style.space(6)
-        anchors.verticalCenter: parent.verticalCenter
-        contentForeground: root.contentForeground
-        contentFontFamily: root.contentFontFamily
-        onTextChanged: root.searchQuery = text
-        onCleared: root.searchQuery = ""
-      }
-    }
+      // Unread-Only Toggle Chip
+      Rectangle {
+        height: Style.space(24)
+        width: unreadText.implicitWidth + Style.space(14)
+        radius: Style.space(12)
+        color: root.unreadOnly
+          ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.18)
+          : (unreadHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent")
+        border.color: root.unreadOnly ? Color.accent : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.12)
+        border.width: 1
 
-    // 3. Main Content Row: Category Drawer (Left) + Article List (Right)
-    Row {
-      width: parent.width
-      height: parent.height - Style.space(32) - Style.space(30) - Style.space(24) - Style.space(24)
-      spacing: (catDrawer.width > 0) ? Style.space(8) : 0
-
-      // Category Drawer (0 width when closed, reclaims 100% space)
-      CategoryDrawer {
-        id: catDrawer
-        height: parent.height
-        isOpen: root.drawerOpen && root.hasCategories
-        categories: root.categories || []
-        selectedCategory: root.currentCategory
-        contentForeground: root.contentForeground
-        contentFontFamily: root.contentFontFamily
-        onCategorySelected: function(catId) {
-          root.currentCategory = catId
-        }
-        onCloseRequested: root.drawerOpen = false
-      }
-
-      // Article List Container (takes 100% of remaining width)
-      Item {
-        width: parent.width - (catDrawer.width > 0 ? catDrawer.width + Style.space(8) : 0)
-        height: parent.height
-
-        // Empty state message
-        Column {
+        Row {
           anchors.centerIn: parent
-          spacing: Style.space(8)
-          visible: root.pageArticles.length === 0
+          spacing: Style.space(4)
 
-          Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            text: (root.subscriptions || []).length === 0 ? "󰑫" : "󰄬"
-            font.family: root.contentFontFamily
-            font.pixelSize: Style.font.title
-            color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.3)
+          Rectangle {
+            anchors.verticalCenter: parent.verticalCenter
+            width: Style.space(5)
+            height: width
+            radius: width / 2
+            color: Color.accent
           }
 
           Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            text: {
-              if ((root.subscriptions || []).length === 0) return root.emptyCopy
-              if (root.searchQuery) return "No articles match \"" + root.searchQuery + "\""
-              if (root.unreadOnly) return "All caught up! No unread articles"
-              return "No articles in this category"
-            }
-            font.family: root.contentFontFamily
-            font.pixelSize: Style.font.body
-            color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.5)
-          }
-        }
-
-        // Articles ListView
-        ListView {
-          id: articleListView
-          anchors.fill: parent
-          visible: root.pageArticles.length > 0
-          model: root.pageArticles
-          spacing: Style.space(2)
-          clip: true
-
-          delegate: ArticleRow {
-            item: modelData
-            isRead: Model.isRead(root.readSet, modelData)
-            isSelected: index === root.selectedIndex
-            categoryName: modelData.category || root.feedCategoryMap[modelData.feedUrl] || ""
-            contentForeground: root.contentForeground
-            contentFontFamily: root.contentFontFamily
-
-            onActivated: root.activateItem(modelData)
-            onToggleRead: root.toggleReadItem(modelData)
-          }
-        }
-      }
-    }
-
-    // 4. Footer Pagination & Status (Cleanly anchored inside boundaries)
-    Item {
-      width: parent.width
-      height: Style.space(24)
-
-      Text {
-        anchors.left: parent.left
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.right: paginationRow.visible ? paginationRow.left : parent.right
-        anchors.rightMargin: Style.space(8)
-        elide: Text.ElideRight
-        text: {
-          if (root.totalFilteredCount === 0) return "0 articles"
-          var start = root.currentPage * root.itemsPerPage + 1
-          var end = Math.min(root.totalFilteredCount, (root.currentPage + 1) * root.itemsPerPage)
-          return "Showing " + start + "-" + end + " of " + root.totalFilteredCount
-        }
-        font.family: root.contentFontFamily
-        font.pixelSize: Style.font.caption
-        color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.4)
-      }
-
-      // Pagination controls (Prev / Page Indicator / Next)
-      Row {
-        id: paginationRow
-        visible: root.totalPages > 1
-        anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
-        spacing: Style.space(4)
-
-        Rectangle {
-          width: Style.space(22)
-          height: Style.space(22)
-          radius: Style.space(4)
-          color: prevMouse.containsMouse && root.currentPage > 0 ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent"
-          opacity: root.currentPage > 0 ? 1.0 : 0.3
-
-          Text {
-            anchors.centerIn: parent
-            text: "󰅁"
+            id: unreadText
+            text: "Unread"
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.caption
-            color: root.contentForeground
+            font.bold: root.unreadOnly
+            color: root.unreadOnly ? Color.accent : root.contentForeground
           }
+        }
 
-          MouseArea {
-            id: prevMouse
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: root.currentPage > 0 ? Qt.PointingHandCursor : Qt.ArrowCursor
-            onClicked: {
-              if (root.currentPage > 0) {
-                root.currentPage--
-                root.selectedIndex = 0
-              }
-            }
+        MouseArea {
+          id: unreadHover
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.unreadOnly = !root.unreadOnly
+        }
+      }
+    }
+
+    // Mark all read button (anchored right)
+    Rectangle {
+      id: markAllBtn
+      anchors.right: parent.right
+      anchors.verticalCenter: parent.verticalCenter
+      width: Style.space(26)
+      height: Style.space(26)
+      radius: Style.space(4)
+      color: markAllHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent"
+
+      Text {
+        anchors.centerIn: parent
+        text: "󰄬"
+        font.family: root.contentFontFamily
+        font.pixelSize: Style.font.body
+        color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.6)
+      }
+
+      MouseArea {
+        id: markAllHover
+        anchors.fill: parent
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+        onClicked: {
+          if (root.hostWidget && typeof root.hostWidget.markItemsRead === "function") {
+            root.hostWidget.markItemsRead(root.allFilteredArticles)
           }
+        }
+      }
+    }
+
+    // Search Field (fills remaining width)
+    SearchField {
+      id: searchField
+      anchors.left: toolbarLeft.right
+      anchors.leftMargin: Style.space(6)
+      anchors.right: markAllBtn.left
+      anchors.rightMargin: Style.space(6)
+      anchors.verticalCenter: parent.verticalCenter
+      contentForeground: root.contentForeground
+      contentFontFamily: root.contentFontFamily
+      onTextChanged: root.searchQuery = text
+      onCleared: root.searchQuery = ""
+    }
+  }
+
+  // 3. Main Content Area (Drawer + Articles filling remaining height)
+  Item {
+    id: mainContentArea
+    anchors.top: toolbarBar.bottom
+    anchors.topMargin: Style.space(6)
+    anchors.bottom: footerBar.top
+    anchors.bottomMargin: Style.space(6)
+    anchors.left: parent.left
+    anchors.right: parent.right
+
+    // Category Drawer
+    CategoryDrawer {
+      id: catDrawer
+      anchors.top: parent.top
+      anchors.bottom: parent.bottom
+      anchors.left: parent.left
+      isOpen: root.drawerOpen && root.hasCategories
+      categories: root.categories || []
+      selectedCategory: root.currentCategory
+      contentForeground: root.contentForeground
+      contentFontFamily: root.contentFontFamily
+      onCategorySelected: function(catId) {
+        root.currentCategory = catId
+      }
+      onCloseRequested: root.drawerOpen = false
+    }
+
+    // Article List Container
+    Item {
+      anchors.top: parent.top
+      anchors.bottom: parent.bottom
+      anchors.left: (catDrawer.width > 0) ? catDrawer.right : parent.left
+      anchors.leftMargin: (catDrawer.width > 0) ? Style.space(8) : 0
+      anchors.right: parent.right
+
+      // Empty state message
+      Column {
+        anchors.centerIn: parent
+        spacing: Style.space(8)
+        visible: root.pageArticles.length === 0
+
+        Text {
+          anchors.horizontalCenter: parent.horizontalCenter
+          text: (root.subscriptions || []).length === 0 ? "󰑫" : "󰄬"
+          font.family: root.contentFontFamily
+          font.pixelSize: Style.font.title
+          color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.3)
         }
 
         Text {
-          anchors.verticalCenter: parent.verticalCenter
-          text: (root.currentPage + 1) + " / " + root.totalPages
+          anchors.horizontalCenter: parent.horizontalCenter
+          text: {
+            if ((root.subscriptions || []).length === 0) return root.emptyCopy
+            if (root.searchQuery) return "No articles match \"" + root.searchQuery + "\""
+            if (root.unreadOnly) return "All caught up! No unread articles"
+            return "No articles in this category"
+          }
+          font.family: root.contentFontFamily
+          font.pixelSize: Style.font.body
+          color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.5)
+        }
+      }
+
+      // Articles ListView (fills available container height)
+      ListView {
+        id: articleListView
+        anchors.fill: parent
+        visible: root.pageArticles.length > 0
+        model: root.pageArticles
+        spacing: Style.space(2)
+        clip: true
+
+        delegate: ArticleRow {
+          item: modelData
+          isRead: Model.isRead(root.readSet, modelData)
+          isSelected: index === root.selectedIndex
+          categoryName: modelData.category || root.feedCategoryMap[modelData.feedUrl] || ""
+          contentForeground: root.contentForeground
+          contentFontFamily: root.contentFontFamily
+
+          onActivated: root.activateItem(modelData)
+          onToggleRead: root.toggleReadItem(modelData)
+        }
+      }
+    }
+  }
+
+  // 4. Footer Pagination & Status (anchored at bottom)
+  Item {
+    id: footerBar
+    anchors.bottom: parent.bottom
+    anchors.left: parent.left
+    anchors.right: parent.right
+    height: Style.space(22)
+
+    Text {
+      anchors.left: parent.left
+      anchors.verticalCenter: parent.verticalCenter
+      anchors.right: paginationRow.visible ? paginationRow.left : parent.right
+      anchors.rightMargin: Style.space(8)
+      elide: Text.ElideRight
+      text: {
+        if (root.totalFilteredCount === 0) return "0 articles"
+        var start = root.currentPage * root.itemsPerPage + 1
+        var end = Math.min(root.totalFilteredCount, (root.currentPage + 1) * root.itemsPerPage)
+        return "Showing " + start + "-" + end + " of " + root.totalFilteredCount
+      }
+      font.family: root.contentFontFamily
+      font.pixelSize: Style.font.caption
+      color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.4)
+    }
+
+    // Pagination controls (Prev / Page Indicator / Next)
+    Row {
+      id: paginationRow
+      visible: root.totalPages > 1
+      anchors.right: parent.right
+      anchors.verticalCenter: parent.verticalCenter
+      spacing: Style.space(4)
+
+      Rectangle {
+        width: Style.space(22)
+        height: Style.space(22)
+        radius: Style.space(4)
+        color: prevMouse.containsMouse && root.currentPage > 0 ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent"
+        opacity: root.currentPage > 0 ? 1.0 : 0.3
+
+        Text {
+          anchors.centerIn: parent
+          text: "󰅁"
           font.family: root.contentFontFamily
           font.pixelSize: Style.font.caption
-          font.bold: true
-          color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.6)
+          color: root.contentForeground
         }
 
-        Rectangle {
-          width: Style.space(22)
-          height: Style.space(22)
-          radius: Style.space(4)
-          color: nextMouse.containsMouse && root.currentPage < root.totalPages - 1 ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent"
-          opacity: root.currentPage < root.totalPages - 1 ? 1.0 : 0.3
-
-          Text {
-            anchors.centerIn: parent
-            text: "󰅂"
-            font.family: root.contentFontFamily
-            font.pixelSize: Style.font.caption
-            color: root.contentForeground
+        MouseArea {
+          id: prevMouse
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: root.currentPage > 0 ? Qt.PointingHandCursor : Qt.ArrowCursor
+          onClicked: {
+            if (root.currentPage > 0) {
+              root.currentPage--
+              root.selectedIndex = 0
+            }
           }
+        }
+      }
 
-          MouseArea {
-            id: nextMouse
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: root.currentPage < root.totalPages - 1 ? Qt.PointingHandCursor : Qt.ArrowCursor
-            onClicked: {
-              if (root.currentPage < root.totalPages - 1) {
-                root.currentPage++
-                root.selectedIndex = 0
-              }
+      Text {
+        anchors.verticalCenter: parent.verticalCenter
+        text: (root.currentPage + 1) + " / " + root.totalPages
+        font.family: root.contentFontFamily
+        font.pixelSize: Style.font.caption
+        font.bold: true
+        color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.6)
+      }
+
+      Rectangle {
+        width: Style.space(22)
+        height: Style.space(22)
+        radius: Style.space(4)
+        color: nextMouse.containsMouse && root.currentPage < root.totalPages - 1 ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent"
+        opacity: root.currentPage < root.totalPages - 1 ? 1.0 : 0.3
+
+        Text {
+          anchors.centerIn: parent
+          text: "󰅂"
+          font.family: root.contentFontFamily
+          font.pixelSize: Style.font.caption
+          color: root.contentForeground
+        }
+
+        MouseArea {
+          id: nextMouse
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: root.currentPage < root.totalPages - 1 ? Qt.PointingHandCursor : Qt.ArrowCursor
+          onClicked: {
+            if (root.currentPage < root.totalPages - 1) {
+              root.currentPage++
+              root.selectedIndex = 0
             }
           }
         }

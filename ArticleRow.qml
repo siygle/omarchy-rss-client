@@ -16,7 +16,7 @@ Item {
   signal activated()
   signal toggleRead()
 
-  height: Style.space(48)
+  height: Style.space(42)
   width: parent ? parent.width : 300
 
   readonly property color mutedColor: Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.45)
@@ -44,7 +44,7 @@ Item {
   Item {
     id: unreadDot
     anchors.left: parent.left
-    anchors.leftMargin: Style.space(8)
+    anchors.leftMargin: Style.space(4)
     anchors.verticalCenter: parent.verticalCenter
     width: Style.space(8)
     height: parent.height
@@ -65,14 +65,14 @@ Item {
     id: actionRow
     visible: root.hovered || root.isSelected
     anchors.right: parent.right
-    anchors.rightMargin: Style.space(8)
+    anchors.rightMargin: Style.space(4)
     anchors.verticalCenter: parent.verticalCenter
-    spacing: Style.space(4)
+    spacing: Style.space(2)
 
     // Mark read/unread toggle
     Rectangle {
-      width: Style.space(24)
-      height: Style.space(24)
+      width: Style.space(22)
+      height: Style.space(22)
       radius: Style.space(4)
       color: markHover.containsMouse ? Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.1) : "transparent"
 
@@ -80,7 +80,7 @@ Item {
         anchors.centerIn: parent
         text: root.isRead ? "󰄱" : "󰄬"
         font.family: root.contentFontFamily
-        font.pixelSize: Style.font.body
+        font.pixelSize: Style.font.caption
         color: root.isRead ? root.mutedColor : Color.accent
       }
 
@@ -95,8 +95,8 @@ Item {
 
     // Open in browser button
     Rectangle {
-      width: Style.space(24)
-      height: Style.space(24)
+      width: Style.space(22)
+      height: Style.space(22)
       radius: Style.space(4)
       color: linkHover.containsMouse ? Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.1) : "transparent"
 
@@ -104,7 +104,7 @@ Item {
         anchors.centerIn: parent
         text: "󰌹"
         font.family: root.contentFontFamily
-        font.pixelSize: Style.font.body
+        font.pixelSize: Style.font.caption
         color: root.mutedColor
       }
 
@@ -122,11 +122,11 @@ Item {
   Column {
     id: textCol
     anchors.left: unreadDot.right
-    anchors.leftMargin: Style.space(8)
+    anchors.leftMargin: Style.space(6)
     anchors.right: actionRow.visible ? actionRow.left : parent.right
-    anchors.rightMargin: Style.space(8)
+    anchors.rightMargin: actionRow.visible ? Style.space(4) : Style.space(4)
     anchors.verticalCenter: parent.verticalCenter
-    spacing: Style.space(2)
+    spacing: 1
 
     Text {
       width: parent.width

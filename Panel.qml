@@ -96,8 +96,8 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(440))
-    contentHeight: panel.fittedContentHeight(Style.space(480))
+    contentWidth: panel.fittedContentWidth(Style.space(460))
+    contentHeight: panel.fittedContentHeight(Style.space(520))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -154,7 +154,10 @@ Panel {
 
       Item {
         anchors.fill: parent
-        anchors.margins: Style.space(10)
+        anchors.leftMargin: Style.space(12)
+        anchors.rightMargin: Style.space(12)
+        anchors.topMargin: Style.space(10)
+        anchors.bottomMargin: Style.space(10)
 
         // 1. Primary Reader View
         ReaderView {
