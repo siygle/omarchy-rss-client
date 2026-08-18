@@ -12,78 +12,8 @@
   },
   "barWidget": {
     "displayName": "RSS-Reeder",
-    "description": "Native RSS and Atom reader for the Omarchy bar with OPML, categories, search, unread tracking, and configurable retention.",
     "category": "Productivity",
     "allowMultiple": false,
-    "defaultSection": "right",
-    "defaults": {
-      "feedUrls": "",
-      "recentListSize": 20,
-      "maxItemsPerFeed": 10,
-      "itemsPerPage": 10,
-      "pollIntervalMinutes": 15,
-      "retentionDays": 30,
-      "barSection": "right"
-    },
-    "schema": [
-      {
-        "key": "feedUrls",
-        "type": "string",
-        "label": "Feed URLs (one per line)",
-        "defaultValue": ""
-      },
-      {
-        "key": "recentListSize",
-        "type": "integer",
-        "label": "Recent list size",
-        "min": 1,
-        "max": 100,
-        "step": 1,
-        "defaultValue": 20
-      },
-      {
-        "key": "maxItemsPerFeed",
-        "type": "integer",
-        "label": "Max items per feed",
-        "min": 1,
-        "max": 100,
-        "step": 1,
-        "defaultValue": 10
-      },
-      {
-        "key": "pollIntervalMinutes",
-        "type": "integer",
-        "label": "Poll interval (minutes)",
-        "min": 5,
-        "max": 1440,
-        "step": 5,
-        "defaultValue": 15
-      },
-      {
-        "key": "itemsPerPage",
-        "type": "integer",
-        "label": "Items per page",
-        "min": 1,
-        "max": 100,
-        "step": 1,
-        "defaultValue": 10
-      },
-      {
-        "key": "retentionDays",
-        "type": "integer",
-        "label": "Feed retention time (days)",
-        "min": 1,
-        "max": 3650,
-        "step": 1,
-        "defaultValue": 30
-      },
-      {
-        "key": "barSection",
-        "type": "enum",
-        "label": "Bar position",
-        "options": ["left", "center", "right"],
-        "defaultValue": "right"
-      }
-    ]
+    "defaultSection": "right"
   }
 }
