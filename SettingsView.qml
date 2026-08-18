@@ -21,7 +21,7 @@ Item {
   signal backRequested()
   signal manageSubscriptionsRequested()
   signal importOpmlRequested()
-  signal shareFeedsRequested()
+  signal exportOpmlRequested()
 
   function applySettings() {
     if (root.hostWidget && typeof root.hostWidget.saveConfig === "function") {
@@ -285,12 +285,12 @@ Item {
                 color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.06)
               }
 
-              // Row: Export OPML / Copy
+              // Row: Export OPML File
               Rectangle {
                 width: parent.width
                 height: Style.space(38)
                 radius: Style.space(6)
-                color: shareHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.05) : "transparent"
+                color: exportHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.05) : "transparent"
 
                 Row {
                   anchors.fill: parent
@@ -309,7 +309,7 @@ Item {
                   Text {
                     anchors.verticalCenter: parent.verticalCenter
                     width: parent.width - Style.space(56)
-                    text: "Export OPML to clipboard"
+                    text: "Export OPML file"
                     font.family: root.contentFontFamily
                     font.pixelSize: Style.font.body
                     color: root.contentForeground
@@ -325,11 +325,11 @@ Item {
                 }
 
                 MouseArea {
-                  id: shareHover
+                  id: exportHover
                   anchors.fill: parent
                   hoverEnabled: true
                   cursorShape: Qt.PointingHandCursor
-                  onClicked: root.shareFeedsRequested()
+                  onClicked: root.exportOpmlRequested()
                 }
               }
             }

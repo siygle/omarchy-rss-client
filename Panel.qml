@@ -84,10 +84,9 @@ Panel {
     }
   }
 
-  function shareFeeds() {
-    if (root.hostWidget && typeof root.hostWidget.shareFeeds === "function") {
-      var count = root.hostWidget.shareFeeds()
-      root.shareStatus = "Exported " + count + " subscriptions to clipboard"
+  function requestOpmlFileExport() {
+    if (root.hostWidget && typeof root.hostWidget.requestOpmlFileExport === "function") {
+      root.hostWidget.requestOpmlFileExport()
     }
   }
 
@@ -204,7 +203,7 @@ Panel {
           onBackRequested: root.currentView = "reader"
           onManageSubscriptionsRequested: root.currentView = "subscriptions"
           onImportOpmlRequested: root.requestOpmlFileImport()
-          onShareFeedsRequested: root.shareFeeds()
+          onExportOpmlRequested: root.requestOpmlFileExport()
         }
 
         // 3. Subscriptions Subview

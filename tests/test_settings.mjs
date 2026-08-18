@@ -528,5 +528,33 @@ test("addSubscription with category selector and creation", () => {
   assert.deepEqual(res3.newSub.categoryPath, []);
 });
 
+test("generateOpml round-trip preserves categorized and uncategorized subscriptions", () => {
+  const subs = [
+    { url: "https://archlinux.org/feeds/news/", title: "Arch Linux", category: "Linux", categoryPath: ["Linux"] },
+    { url: "https://news.ycombinator.com/rss", title: "Hacker News", category: "Tech", categoryPath: ["Tech"] },
+    { url: "https://standalone.com/feed", title: "Standalone", category: "", categoryPath: [] }
+  ];
+
+  const opmlText = Model.generateOpml(subs);
+  assert.ok(opmlText.includes('version="2.0"'));
+  assert.ok(opmlText.includes('<outline text="Linux"'));
+  assert.ok(opmlText.includes('<outline text="Tech"'));
+  assert.ok(opmlText.includes('xmlUrl="https://standalone.com/feed"'));
+
+  const parsedResult = Model.parseOpmlStructured(opmlText);
+  const parsed = parsedResult.subscriptions;
+  assert.equal(parsed.length, 3);
+  const arch = parsed.find(s => s.url === "https://archlinux.org/feeds/news/");
+  assert.ok(arch);
+  assert.equal(arch.title, "Arch Linux");
+  assert.equal(arch.category, "Linux");
+
+  const stand = parsed.find(s => s.url === "https://standalone.com/feed");
+  assert.ok(stand);
+  assert.equal(stand.title, "Standalone");
+  assert.equal(stand.category, "");
+});
+
+
 
 

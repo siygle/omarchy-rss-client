@@ -240,11 +240,91 @@ BarWidget {
     injectPanel()
   }
 
-  function shareFeeds() {
-    var payload = Model.generateOpml(root.configuredSubscriptions)
-    var quoted = "'" + String(payload).replace(/'/g, "'\\''") + "'"
-    Quickshell.execDetached(["bash", "-lc", "printf %s " + quoted + " | wl-copy"])
-    return root.configuredSubscriptions.length
+  property string selectedExportPath: ""
+
+  function defaultExportFilename() {
+    var now = new Date()
+    var year = now.getFullYear()
+    var m = now.getMonth() + 1
+    var d = now.getDate()
+    var monthStr = m < 10 ? ("0" + m) : String(m)
+    var dayStr = d < 10 ? ("0" + d) : String(d)
+    return "rss-reeder-" + year + "-" + monthStr + "-" + dayStr + ".opml"
+  }
+
+  function requestOpmlFileExport() {
+    if (opmlExportSelectProcess.running || opmlWriteProcess.running) return
+    root.selectedExportPath = ""
+    var defaultName = defaultExportFilename()
+    console.log("[RSS-REEDER] requestOpmlFileExport entered, defaultName:", defaultName)
+    opmlExportSelectProcess.command = [
+      "python3", "-c",
+      "import argparse, os, sys, gi\n" +
+      "gi.require_version('Gio', '2.0')\n" +
+      "from gi.repository import Gio, GLib\n" +
+      "parser = argparse.ArgumentParser(add_help=False)\n" +
+      "parser.add_argument('--title', default='Save OPML file')\n" +
+      "parser.add_argument('--default-name', default='rss-reeder.opml')\n" +
+      "parser.add_argument('--extensions', default='opml xml')\n" +
+      "args, _ = parser.parse_known_args()\n" +
+      "bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)\n" +
+      "loop = GLib.MainLoop()\n" +
+      "uris = []\n" +
+      "def on_response(conn, sender, path, iface, sig, params):\n" +
+      "    code, res = params.unpack()\n" +
+      "    if code == 0:\n" +
+      "        uris.extend(res.get('uris', []))\n" +
+      "    loop.quit()\n" +
+      "token = 'omarchysave%d' % os.getpid()\n" +
+      "sender = bus.get_unique_name()[1:].replace('.', '_')\n" +
+      "predicted = '/org/freedesktop/portal/desktop/request/%s/%s' % (sender, token)\n" +
+      "bus.signal_subscribe('org.freedesktop.portal.Desktop', 'org.freedesktop.portal.Request', 'Response', predicted, None, Gio.DBusSignalFlags.NONE, on_response)\n" +
+      "exts = [e.lstrip('.').lower() for e in args.extensions.split()]\n" +
+      "patterns = [(0, '*.' + e) for e in exts] + [(0, '*.' + e.upper()) for e in exts]\n" +
+      "label = ' '.join('*.' + e for e in exts)\n" +
+      "filters = GLib.Variant('a(sa(us))', [(label, patterns)])\n" +
+      "options = {'handle_token': GLib.Variant('s', token), 'current_name': GLib.Variant('s', args.default_name), 'filters': filters, 'current_filter': GLib.Variant('(sa(us))', (label, patterns))}\n" +
+      "try:\n" +
+      "    handle = bus.call_sync('org.freedesktop.portal.Desktop', '/org/freedesktop/portal/desktop', 'org.freedesktop.portal.FileChooser', 'SaveFile', GLib.Variant('(ssa{sv})', ('', args.title, options)), None, Gio.DBusCallFlags.NONE, -1, None).unpack()[0]\n" +
+      "    if handle != predicted:\n" +
+      "        bus.signal_subscribe('org.freedesktop.portal.Desktop', 'org.freedesktop.portal.Request', 'Response', handle, None, Gio.DBusSignalFlags.NONE, on_response)\n" +
+      "except Exception as e:\n" +
+      "    sys.exit(2)\n" +
+      "GLib.timeout_add_seconds(600, loop.quit)\n" +
+      "loop.run()\n" +
+      "for u in uris:\n" +
+      "    print(GLib.filename_from_uri(u)[0])\n" +
+      "sys.exit(0 if uris else 1)\n",
+      "--title", "Export OPML file",
+      "--default-name", defaultName,
+      "--extensions", "opml xml"
+    ]
+    opmlExportSelectProcess.running = true
+  }
+
+  function handleSelectedExportFile(fileUrlOrPath) {
+    var raw = String(fileUrlOrPath || "").trim()
+    if (!raw) return
+    var resolvedPath = Model.filePathFromUrl(raw)
+    if (!resolvedPath) return
+    if (!/\.opml$/i.test(resolvedPath) && !/\.xml$/i.test(resolvedPath)) {
+      resolvedPath += ".opml"
+    }
+    console.log("[RSS-REEDER] handleSelectedExportFile target path:", resolvedPath)
+    var opmlContent = Model.generateOpml(root.configuredSubscriptions)
+    opmlWriteProcess.targetPath = resolvedPath
+    opmlWriteProcess.exportedCount = root.configuredSubscriptions.length
+    opmlWriteProcess.command = [
+      "python3", "-c",
+      "import sys\n" +
+      "path = sys.argv[1]\n" +
+      "content = sys.argv[2]\n" +
+      "with open(path, 'w', encoding='utf-8') as f:\n" +
+      "    f.write(content)\n",
+      resolvedPath,
+      opmlContent
+    ]
+    opmlWriteProcess.running = true
   }
 
   function updateSubscriptions(subs) {
@@ -602,6 +682,50 @@ BarWidget {
         panelLoader.item.feedUrls = root.configuredFeedUrls
         panelLoader.item.shareStatus = result.message
         panelLoader.item.lastImportResult = result
+      }
+      injectPanel()
+    }
+  }
+
+  Process {
+    id: opmlExportSelectProcess
+    stdout: StdioCollector {
+      id: opmlExportSelectStdout
+      waitForEnd: true
+      onStreamFinished: {
+        var path = String(opmlExportSelectStdout.text || "").trim()
+        if (path) root.selectedExportPath = path
+      }
+    }
+    onExited: function(exitCode) {
+      console.log("[RSS-REEDER] opmlExportSelectProcess exited with code:", exitCode, "path:", root.selectedExportPath)
+      if (exitCode === 0 && root.selectedExportPath) {
+        root.handleSelectedExportFile(root.selectedExportPath)
+      }
+    }
+  }
+
+  Process {
+    id: opmlWriteProcess
+    property string targetPath: ""
+    property int exportedCount: 0
+    stdout: StdioCollector { id: opmlWriteStdout; waitForEnd: true }
+    stderr: StdioCollector { id: opmlWriteStderr; waitForEnd: true }
+    onExited: function(exitCode) {
+      console.log("[RSS-REEDER] opmlWriteProcess exited with code:", exitCode)
+      if (exitCode !== 0) {
+        var err = String(opmlWriteStderr.text || "").trim() || "Failed to write file"
+        root.lastImportMessage = "Export failed: " + err
+        root.lastImportResult = { status: "error", message: root.lastImportMessage }
+      } else {
+        var filename = Model.filenameFromPath(opmlWriteProcess.targetPath)
+        var msg = "Saved " + filename + " (" + opmlWriteProcess.exportedCount + " feeds)"
+        root.lastImportMessage = msg
+        root.lastImportResult = { status: "success", message: msg, exported: opmlWriteProcess.exportedCount }
+      }
+      if (panelLoader.item) {
+        panelLoader.item.shareStatus = root.lastImportMessage
+        panelLoader.item.lastImportResult = root.lastImportResult
       }
       injectPanel()
     }
