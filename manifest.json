@@ -3,7 +3,7 @@
   "id": "io.github.sanjyay.rss-reeder",
   "name": "RSS-Reeder",
   "version": "0.1.0",
-  "author": "Sanjyay",
+  "author": "sanjyay",
   "license": "MIT",
   "description": "Native RSS and Atom reader for the Omarchy bar with OPML, categories, search, unread tracking, and configurable retention.",
   "kinds": ["bar-widget"],
