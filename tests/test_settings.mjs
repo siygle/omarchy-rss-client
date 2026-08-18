@@ -461,4 +461,72 @@ test("pruneArticlesBySubscriptions removes articles for deleted feeds and update
   assert.equal(categories.find(c => c.id === "Reddit"), undefined);
 });
 
+test("getAvailableCategories extracts sorted unique category paths", () => {
+  const subs = [
+    { url: "https://a.com/rss", category: "News", categoryPath: ["News"] },
+    { url: "https://b.com/rss", category: "Linux", categoryPath: ["Technology", "Linux"] },
+    { url: "https://c.com/rss", category: "AI", categoryPath: ["Technology", "AI"] },
+    { url: "https://d.com/rss", category: "", categoryPath: [] },
+    { url: "https://e.com/rss", category: "news", categoryPath: ["News"] }
+  ];
+
+  const cats = Model.getAvailableCategories(subs);
+  assert.equal(cats.length, 3);
+  assert.deepEqual(cats.map(c => c.display), [
+    "News",
+    "Technology / AI",
+    "Technology / Linux"
+  ]);
+});
+
+test("normalizeCategorySelection handles existing casing, empty, and new paths", () => {
+  const subs = [
+    { url: "https://a.com/rss", category: "Linux", categoryPath: ["Linux"] },
+    { url: "https://b.com/rss", category: "AI", categoryPath: ["Technology", "AI"] }
+  ];
+
+  // 1. Empty / No category
+  assert.deepEqual(Model.normalizeCategorySelection("", subs), { category: "", categoryPath: [] });
+  assert.deepEqual(Model.normalizeCategorySelection("No category", subs), { category: "", categoryPath: [] });
+  assert.deepEqual(Model.normalizeCategorySelection("  None  ", subs), { category: "", categoryPath: [] });
+
+  // 2. Existing category case-insensitivity
+  assert.deepEqual(Model.normalizeCategorySelection("linux", subs), { category: "Linux", categoryPath: ["Linux"] });
+  assert.deepEqual(Model.normalizeCategorySelection("LINUX", subs), { category: "Linux", categoryPath: ["Linux"] });
+
+  // 3. Existing nested path case-insensitivity
+  assert.deepEqual(Model.normalizeCategorySelection("technology / ai", subs), { category: "AI", categoryPath: ["Technology", "AI"] });
+
+  // 4. New simple category
+  assert.deepEqual(Model.normalizeCategorySelection("Gaming", subs), { category: "Gaming", categoryPath: ["Gaming"] });
+
+  // 5. New nested category
+  assert.deepEqual(Model.normalizeCategorySelection("Science / Space", subs), { category: "Space", categoryPath: ["Science", "Space"] });
+});
+
+test("addSubscription with category selector and creation", () => {
+  const initial = [
+    { url: "https://archlinux.org/feeds/news/", title: "Arch", category: "Linux", categoryPath: ["Linux"], enabled: true }
+  ];
+
+  // 1. Add with existing category
+  const res1 = Model.addSubscription(initial, "https://kernel.org/feed.xml", "Kernel", "linux");
+  assert.equal(res1.ok, true);
+  assert.equal(res1.newSub.category, "Linux");
+  assert.deepEqual(res1.newSub.categoryPath, ["Linux"]);
+
+  // 2. Add with new category
+  const res2 = Model.addSubscription(res1.subscriptions, "https://ign.com/rss", "IGN", "Gaming");
+  assert.equal(res2.ok, true);
+  assert.equal(res2.newSub.category, "Gaming");
+  assert.deepEqual(res2.newSub.categoryPath, ["Gaming"]);
+
+  // 3. Add with No category
+  const res3 = Model.addSubscription(res2.subscriptions, "https://blog.example/rss", "Blog", "No category");
+  assert.equal(res3.ok, true);
+  assert.equal(res3.newSub.category, "");
+  assert.deepEqual(res3.newSub.categoryPath, []);
+});
+
+
 

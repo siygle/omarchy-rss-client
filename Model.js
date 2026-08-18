@@ -508,6 +508,69 @@ function normalizeFeedInputUrl(input) {
   return s
 }
 
+function getAvailableCategories(subscriptions) {
+  var subs = normalizeSubscriptions(subscriptions)
+  var map = {}
+  var out = []
+
+  for (var i = 0; i < subs.length; i++) {
+    var sub = subs[i]
+    var cat = String(sub.category || "").trim()
+    var path = Array.isArray(sub.categoryPath) ? sub.categoryPath : []
+    var display = path.length > 1 ? path.join(" / ") : cat
+
+    if (display && !map[display.toLowerCase()]) {
+      map[display.toLowerCase()] = true
+      out.push({
+        id: cat || display,
+        name: cat || display,
+        display: display,
+        category: cat || display,
+        categoryPath: path.length ? path : [cat || display]
+      })
+    }
+  }
+
+  out.sort(function(a, b) {
+    return a.display.toLowerCase().localeCompare(b.display.toLowerCase())
+  })
+
+  return out
+}
+
+function normalizeCategorySelection(inputCategory, subscriptions) {
+  var raw = String(inputCategory || "").trim()
+  if (!raw || raw.toLowerCase() === "no category" || raw.toLowerCase() === "none") {
+    return { category: "", categoryPath: [] }
+  }
+
+  var subs = normalizeSubscriptions(subscriptions)
+  // Check against existing subscriptions case-insensitively
+  for (var i = 0; i < subs.length; i++) {
+    var s = subs[i]
+    var cat = String(s.category || "").trim()
+    var path = Array.isArray(s.categoryPath) ? s.categoryPath : []
+    var pathStr = path.join(" / ").trim()
+
+    if (pathStr && pathStr.toLowerCase() === raw.toLowerCase()) {
+      return { category: cat || path[path.length - 1], categoryPath: path }
+    }
+    if (cat && cat.toLowerCase() === raw.toLowerCase()) {
+      return { category: cat, categoryPath: path.length ? path : [cat] }
+    }
+  }
+
+  // If user typed a new path with " / "
+  if (raw.indexOf("/") !== -1) {
+    var parts = raw.split(/\s*\/\s*/).map(function(p) { return p.trim() }).filter(Boolean)
+    if (parts.length > 0) {
+      return { category: parts[parts.length - 1], categoryPath: parts }
+    }
+  }
+
+  return { category: raw, categoryPath: [raw] }
+}
+
 function addSubscription(subscriptions, inputUrl, inputTitle, inputCategory) {
   var url = normalizeFeedInputUrl(inputUrl)
   if (!isHttpsUrl(url)) {
@@ -522,14 +585,13 @@ function addSubscription(subscriptions, inputUrl, inputTitle, inputCategory) {
   }
 
   var title = String(inputTitle || "").trim() || extractDomainTitle(url)
-  var cat = String(inputCategory || "").trim()
-  var catPath = cat ? [cat] : []
+  var catInfo = normalizeCategorySelection(inputCategory, list)
 
   var newSub = {
     url: url,
     title: title,
-    categoryPath: catPath,
-    category: cat,
+    categoryPath: catInfo.categoryPath,
+    category: catInfo.category,
     enabled: true
   }
 
@@ -1275,6 +1337,8 @@ if (typeof module !== "undefined" && module.exports) {
     recentList: recentList,
     rowText: rowText,
     normalizeFeedInputUrl: normalizeFeedInputUrl,
+    getAvailableCategories: getAvailableCategories,
+    normalizeCategorySelection: normalizeCategorySelection,
     addSubscription: addSubscription,
     removeSubscription: removeSubscription,
     pruneArticlesBySubscriptions: pruneArticlesBySubscriptions,
