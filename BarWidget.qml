@@ -70,13 +70,7 @@ BarWidget {
   }
   readonly property var settingsReadSet: Model.readIdentities(getSetting("readIdentities", ""))
   property var localReadSet: []
-  readonly property var readSet: {
-    var next = Model.readIdentities(Model.serializeReadIdentities(root.localReadSet))
-    var extra = root.settingsReadSet || []
-    for (var i = 0; i < extra.length; i++)
-      next = Model.markRead(next, { identity: extra[i] })
-    return next
-  }
+  readonly property var readSet: root.localReadSet || []
   readonly property int badgeCount: Model.unreadCount(root.items, root.readSet)
   readonly property string statePath: {
     var home = Quickshell.env("HOME") || ""
@@ -153,9 +147,10 @@ BarWidget {
   }
 
   function applyLocalRead(next) {
-    root.localReadSet = next
+    var cleaned = Model.readIdentities(next)
+    root.localReadSet = cleaned
     persistSettings({
-      readIdentities: Model.serializeReadIdentities(next)
+      readIdentities: Model.serializeReadIdentities(cleaned)
     })
     persistState()
     injectPanel()
@@ -656,7 +651,7 @@ BarWidget {
     printErrors: false
     onLoaded: {
       var parsed = Model.parseState(text())
-      root.localReadSet = parsed.readIdentities
+      root.localReadSet = parsed.readIdentities || []
       if (parsed.items && parsed.items.length) {
         var pruned = Model.pruneArticlesByRetention(parsed.items, root.configuredRetentionDays)
         root.items = Model.enrichArticles(pruned, root.configuredSubscriptions)
@@ -669,7 +664,7 @@ BarWidget {
     }
     onLoadFailed: {
       root.stateReady = true
-      root.localReadSet = root.settingsReadSet
+      root.localReadSet = root.settingsReadSet || []
       root.fetchFeed()
     }
   }
