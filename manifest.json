@@ -22,6 +22,7 @@
       "maxItemsPerFeed": 10,
       "itemsPerPage": 10,
       "pollIntervalMinutes": 15,
+      "retentionDays": 30,
       "barSection": "right"
     },
     "schema": [
@@ -66,6 +67,15 @@
         "max": 100,
         "step": 1,
         "defaultValue": 10
+      },
+      {
+        "key": "retentionDays",
+        "type": "integer",
+        "label": "Feed retention time (days)",
+        "min": 1,
+        "max": 3650,
+        "step": 1,
+        "defaultValue": 30
       },
       {
         "key": "barSection",

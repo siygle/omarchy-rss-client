@@ -23,6 +23,7 @@ Panel {
   property int pollIntervalMinutes: 15
   property int maxItemsPerFeed: 10
   property int itemsPerPage: 10
+  property int retentionDays: 30
   property bool unreadOnlyDefault: false
   property string barSection: "right"
   property var lastImportResult: null
@@ -47,6 +48,7 @@ Panel {
       root.pollIntervalMinutes = root.hostWidget.configuredPollIntervalMinutes
       root.maxItemsPerFeed = root.hostWidget.configuredMaxItemsPerFeed
       root.itemsPerPage = root.hostWidget.configuredItemsPerPage
+      root.retentionDays = root.hostWidget.configuredRetentionDays
       root.unreadOnlyDefault = root.hostWidget.configuredUnreadOnlyDefault
       root.barSection = root.hostWidget.configuredBarSection
       root.lastImportResult = root.hostWidget.lastImportResult
@@ -192,6 +194,7 @@ Panel {
           pollIntervalMinutes: root.pollIntervalMinutes
           maxItemsPerFeed: root.maxItemsPerFeed
           itemsPerPage: root.itemsPerPage
+          retentionDays: root.retentionDays
           barSection: root.barSection
           unreadOnlyDefault: root.unreadOnlyDefault
           shareStatus: root.shareStatus

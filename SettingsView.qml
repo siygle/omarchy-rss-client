@@ -11,6 +11,7 @@ Item {
   property int pollIntervalMinutes: 15
   property int maxItemsPerFeed: 10
   property int itemsPerPage: 10
+  property int retentionDays: 30
   property string barSection: "right"
   property bool unreadOnlyDefault: false
   property string shareStatus: ""
@@ -30,7 +31,8 @@ Item {
         root.maxItemsPerFeed,
         root.itemsPerPage,
         root.barSection,
-        root.unreadOnlyDefault
+        root.unreadOnlyDefault,
+        root.retentionDays
       )
     }
   }
@@ -346,7 +348,7 @@ Item {
 
           Rectangle {
             width: parent.width
-            height: Style.space(144)
+            height: Style.space(180)
             radius: Style.space(6)
             color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.03)
             border.color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08)
@@ -517,6 +519,73 @@ Item {
                         }
                       }
                     }
+                  }
+                }
+              }
+
+              Rectangle { width: parent.width; height: 1; color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.06) }
+
+              // Feed retention time
+              Row {
+                width: parent.width
+                height: Style.space(35)
+                anchors.leftMargin: Style.space(10)
+                anchors.rightMargin: Style.space(10)
+                spacing: Style.space(8)
+
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  width: parent.width - Style.space(130)
+                  text: "Feed retention time"
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.body
+                  color: root.contentForeground
+                }
+
+                Row {
+                  anchors.verticalCenter: parent.verticalCenter
+                  spacing: Style.space(6)
+
+                  Rectangle {
+                    width: Style.space(48)
+                    height: Style.space(24)
+                    radius: Style.space(4)
+                    color: retentionInput.activeFocus
+                      ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08)
+                      : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.04)
+                    border.color: retentionInput.activeFocus ? Color.accent : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.12)
+                    border.width: 1
+
+                    TextInput {
+                      id: retentionInput
+                      anchors.fill: parent
+                      horizontalAlignment: Text.AlignHCenter
+                      verticalAlignment: Text.AlignVCenter
+                      text: String(root.retentionDays)
+                      font.family: root.contentFontFamily
+                      font.pixelSize: Style.font.caption
+                      font.bold: true
+                      color: root.contentForeground
+                      selectByMouse: true
+                      inputMethodHints: Qt.ImhDigitsOnly
+                      validator: RegularExpressionValidator { regularExpression: /^[0-9]+$/ }
+                      onEditingFinished: {
+                        var val = Model.normalizeRetentionDays(text, root.retentionDays)
+                        text = String(val)
+                        if (val !== root.retentionDays) {
+                          root.retentionDays = val
+                          root.applySettings()
+                        }
+                      }
+                    }
+                  }
+
+                  Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "days"
+                    font.family: root.contentFontFamily
+                    font.pixelSize: Style.font.caption
+                    color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.6)
                   }
                 }
               }

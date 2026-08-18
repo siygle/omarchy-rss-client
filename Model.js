@@ -134,6 +134,61 @@ function emptyPanelCopy(urls) {
   return "No recent items"
 }
 
+var DEFAULT_RETENTION_DAYS = 30
+var MIN_RETENTION_DAYS = 1
+var MAX_RETENTION_DAYS = 3650
+
+function normalizeRetentionDays(value, fallback) {
+  var fb = 30
+  if (fallback !== undefined && fallback !== null && fallback !== "") {
+    var fbNum = Number(fallback)
+    if (isFinite(fbNum) && fbNum >= 1 && fbNum <= 3650 && Math.floor(fbNum) === fbNum) {
+      fb = Math.floor(fbNum)
+    }
+  }
+
+  if (value === undefined || value === null) return fb
+  if (typeof value === "boolean") return fb
+  var s = String(value).trim()
+  if (!s || !/^[0-9]+$/.test(s)) return fb
+
+  var n = Number(s)
+  if (!isFinite(n) || isNaN(n)) return fb
+  if (n < 1 || n > 3650) return fb
+  return Math.floor(n)
+}
+
+function pruneArticlesByRetention(items, retentionDays, nowMs) {
+  var list = items || []
+  var days = normalizeRetentionDays(retentionDays, DEFAULT_RETENTION_DAYS)
+  var now = (typeof nowMs === "number" && isFinite(nowMs) && nowMs > 0) ? nowMs : Date.now()
+  var retentionMs = days * 24 * 60 * 60 * 1000
+  var cutoffMs = now - retentionMs
+
+  var out = []
+  for (var i = 0; i < list.length; i++) {
+    var a = list[i]
+    if (!a) continue
+    var ts = a.pubDateMs
+    if (ts === undefined || ts === null || !isFinite(ts) || ts <= 0) {
+      if (a.pubDate) ts = parsePubDate(a.pubDate)
+    }
+    if (ts === undefined || ts === null || !isFinite(ts) || ts <= 0) {
+      if (a.fetchedAtMs && isFinite(a.fetchedAtMs) && a.fetchedAtMs > 0) {
+        ts = a.fetchedAtMs
+      } else {
+        // Fallback: If publication timestamp is completely unavailable, use now so fresh item is kept
+        ts = now
+      }
+    }
+
+    if (ts >= cutoffMs) {
+      out.push(a)
+    }
+  }
+  return out
+}
+
 function pageSize(value) {
   var n = Number(value)
   if (value === undefined || value === null || value === "" || !isFinite(n)) return 10
@@ -1128,6 +1183,11 @@ if (typeof module !== "undefined" && module.exports) {
     resolveUrl: resolveUrl,
     recentList: recentList,
     rowText: rowText,
+    DEFAULT_RETENTION_DAYS: DEFAULT_RETENTION_DAYS,
+    MIN_RETENTION_DAYS: MIN_RETENTION_DAYS,
+    MAX_RETENTION_DAYS: MAX_RETENTION_DAYS,
+    normalizeRetentionDays: normalizeRetentionDays,
+    pruneArticlesByRetention: pruneArticlesByRetention,
     relativeTime: relativeTime,
     stripHtml: stripHtml
   }

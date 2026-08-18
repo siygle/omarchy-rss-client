@@ -261,3 +261,112 @@ test("fetched bodies must be feed or HTML text under the size cap", () => {
   assert.equal(Model.maxFeedBytes(), 2097152);
   assert.equal(Model.isFeedTextResponse("text/xml", "x".repeat(Model.maxFeedBytes() + 1)), false);
 });
+
+test("normalizeRetentionDays validates and normalizes feed retention days", () => {
+  // Defaults & missing migration
+  assert.equal(Model.normalizeRetentionDays(undefined), 30);
+  assert.equal(Model.normalizeRetentionDays(null), 30);
+  assert.equal(Model.normalizeRetentionDays(""), 30);
+
+  // Minimum & Maximum boundaries
+  assert.equal(Model.normalizeRetentionDays(1), 1);
+  assert.equal(Model.normalizeRetentionDays("1"), 1);
+  assert.equal(Model.normalizeRetentionDays(30), 30);
+  assert.equal(Model.normalizeRetentionDays("30"), 30);
+  assert.equal(Model.normalizeRetentionDays(3650), 3650);
+  assert.equal(Model.normalizeRetentionDays("3650"), 3650);
+
+  // Custom valid values
+  assert.equal(Model.normalizeRetentionDays(7), 7);
+  assert.equal(Model.normalizeRetentionDays("14"), 14);
+  assert.equal(Model.normalizeRetentionDays(90), 90);
+  assert.equal(Model.normalizeRetentionDays(365), 365);
+
+  // Invalid values fallback to default or provided fallback
+  assert.equal(Model.normalizeRetentionDays(0), 30);
+  assert.equal(Model.normalizeRetentionDays(-5), 30);
+  assert.equal(Model.normalizeRetentionDays(30.5), 30);
+  assert.equal(Model.normalizeRetentionDays("30.5"), 30);
+  assert.equal(Model.normalizeRetentionDays("abc"), 30);
+  assert.equal(Model.normalizeRetentionDays("30days"), 30);
+  assert.equal(Model.normalizeRetentionDays(5000), 30);
+  assert.equal(Model.normalizeRetentionDays(true), 30);
+  assert.equal(Model.normalizeRetentionDays(false), 30);
+
+  // Custom fallback preservation
+  assert.equal(Model.normalizeRetentionDays("invalid", 14), 14);
+  assert.equal(Model.normalizeRetentionDays(0, 7), 7);
+});
+
+test("pruneArticlesByRetention filters articles by publication date cutoff", () => {
+  const nowMs = 1700000000000; // Fixed reference point
+  const oneDayMs = 24 * 60 * 60 * 1000;
+
+  const exactCutoffMs = nowMs - (30 * oneDayMs);
+  const newerMs = nowMs - (10 * oneDayMs);
+  const olderMs = nowMs - (31 * oneDayMs);
+  const oneDayOldMs = nowMs - (1 * oneDayMs);
+  const twoDaysOldMs = nowMs - (2 * oneDayMs);
+
+  const items = [
+    { identity: "newer", title: "Newer Post", pubDateMs: newerMs },
+    { identity: "exact", title: "Exact Cutoff Post", pubDateMs: exactCutoffMs },
+    { identity: "older", title: "Older Expired Post", pubDateMs: olderMs },
+    { identity: "no_timestamp", title: "No Timestamp Post" },
+    { identity: "pubdate_string", title: "Parsed PubDate String Post", pubDate: new Date(newerMs).toUTCString() }
+  ];
+
+  // 1. 30-day retention
+  const pruned30 = Model.pruneArticlesByRetention(items, 30, nowMs);
+  assert.deepEqual(
+    pruned30.map((it) => it.identity),
+    ["newer", "exact", "no_timestamp", "pubdate_string"]
+  );
+
+  // 2. 1-day retention
+  const items1Day = [
+    { identity: "today", pubDateMs: nowMs - (12 * 60 * 60 * 1000) },
+    { identity: "boundary", pubDateMs: nowMs - oneDayMs },
+    { identity: "yesterday", pubDateMs: twoDaysOldMs }
+  ];
+  const pruned1 = Model.pruneArticlesByRetention(items1Day, 1, nowMs);
+  assert.deepEqual(
+    pruned1.map((it) => it.identity),
+    ["today", "boundary"]
+  );
+
+  // 3. Custom 7-day retention
+  const items7Day = [
+    { identity: "day3", pubDateMs: nowMs - (3 * oneDayMs) },
+    { identity: "day8", pubDateMs: nowMs - (8 * oneDayMs) }
+  ];
+  const pruned7 = Model.pruneArticlesByRetention(items7Day, 7, nowMs);
+  assert.deepEqual(
+    pruned7.map((it) => it.identity),
+    ["day3"]
+  );
+});
+
+test("pruneArticlesByRetention preserves subscriptions and category structures untouched", () => {
+  const subs = [
+    { url: "https://archlinux.org/rss", title: "Arch", category: "Linux", categoryPath: ["Linux"], enabled: true },
+    { url: "https://news.ycombinator.com/rss", title: "HN", category: "Tech", categoryPath: ["Tech"], enabled: true }
+  ];
+
+  const nowMs = Date.now();
+  const oldMs = nowMs - (100 * 24 * 60 * 60 * 1000);
+  const articles = [
+    { identity: "old_arch", feedUrl: "https://archlinux.org/rss", pubDateMs: oldMs, category: "Linux" },
+    { identity: "fresh_hn", feedUrl: "https://news.ycombinator.com/rss", pubDateMs: nowMs, category: "Tech" }
+  ];
+
+  const pruned = Model.pruneArticlesByRetention(articles, 30, nowMs);
+  assert.equal(pruned.length, 1);
+  assert.equal(pruned[0].identity, "fresh_hn");
+
+  // Verify subscriptions list and categories are completely untouched
+  assert.equal(subs.length, 2);
+  assert.equal(subs[0].url, "https://archlinux.org/rss");
+  assert.equal(subs[0].category, "Linux");
+  assert.equal(subs[1].category, "Tech");
+});

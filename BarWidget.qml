@@ -41,6 +41,7 @@ BarWidget {
   }
   readonly property int configuredPollIntervalMinutes: Model.pollIntervalMinutes(setting("pollIntervalMinutes", 15))
   readonly property int configuredItemsPerPage: Model.pageSize(setting("itemsPerPage", 10))
+  readonly property int configuredRetentionDays: Model.normalizeRetentionDays(setting("retentionDays", setting("feedRetentionDays", 30)))
   readonly property bool configuredUnreadOnlyDefault: setting("unreadOnlyDefault", false) === true
   readonly property string configuredBarSection: {
     var fromLayout = Model.sectionFromLayout(root.bar && root.bar.layoutConfig, root.moduleName)
@@ -69,6 +70,16 @@ BarWidget {
   property bool restartWhenIdle: false
   property bool stateReady: false
 
+  function applyRetentionCleanup() {
+    if (!root.items || !root.items.length) return
+    var pruned = Model.pruneArticlesByRetention(root.items, root.configuredRetentionDays)
+    if (pruned.length !== root.items.length) {
+      root.items = pruned
+      persistState()
+      injectPanel()
+    }
+  }
+
   function injectPanel() {
     var target = panelLoader.item
     if (!target) return
@@ -85,6 +96,7 @@ BarWidget {
     if ("pollIntervalMinutes" in target) target.pollIntervalMinutes = root.configuredPollIntervalMinutes
     if ("maxItemsPerFeed" in target) target.maxItemsPerFeed = root.configuredMaxItemsPerFeed
     if ("itemsPerPage" in target) target.itemsPerPage = root.configuredItemsPerPage
+    if ("retentionDays" in target) target.retentionDays = root.configuredRetentionDays
     if ("unreadOnlyDefault" in target) target.unreadOnlyDefault = root.configuredUnreadOnlyDefault
     if ("barSection" in target) target.barSection = root.configuredBarSection
     if ("readSet" in target) target.readSet = root.readSet
@@ -236,12 +248,13 @@ BarWidget {
     return updateSubscriptions(merged)
   }
 
-  function saveConfig(subs, minutes, perFeed, perPage, section, defaultUnreadOnly) {
+  function saveConfig(subs, minutes, perFeed, perPage, section, defaultUnreadOnly, retention) {
     var normalized = Model.normalizeSubscriptions(subs !== undefined ? subs : root.configuredSubscriptions)
     var feedList = []
     for (var i = 0; i < normalized.length; i++) {
       if (normalized[i].enabled !== false) feedList.push(normalized[i].url)
     }
+    var retDays = Model.normalizeRetentionDays(retention !== undefined ? retention : root.configuredRetentionDays)
     persistSettings({
       subscriptions: Model.serializeSubscriptions(normalized),
       feedUrls: Model.serializeFeedUrls(feedList),
@@ -249,9 +262,11 @@ BarWidget {
       maxItemsPerFeed: Model.maxItemsPerFeed(perFeed),
       itemsPerPage: Model.pageSize(perPage),
       barSection: Model.barSection(section),
-      unreadOnlyDefault: defaultUnreadOnly === true
+      unreadOnlyDefault: defaultUnreadOnly === true,
+      retentionDays: retDays
     })
     applyBarSection(section)
+    applyRetentionCleanup()
     fetchFeed()
   }
 
@@ -327,7 +342,8 @@ BarWidget {
 
   function finishFetch() {
     var rawItems = Model.uniqueItems(root.collectedItems)
-    root.items = Model.enrichArticles(rawItems, root.configuredSubscriptions)
+    var pruned = Model.pruneArticlesByRetention(rawItems, root.configuredRetentionDays)
+    root.items = Model.enrichArticles(pruned, root.configuredSubscriptions)
     persistState()
     injectPanel()
   }
@@ -421,6 +437,7 @@ BarWidget {
   onBarChanged: injectPanel()
   onSettingsChanged: injectPanel()
   onConfiguredFeedUrlsChanged: fetchFeed()
+  onConfiguredRetentionDaysChanged: applyRetentionCleanup()
 
   Component.onCompleted: mkdirProcess.running = true
 
@@ -447,7 +464,10 @@ BarWidget {
       var parsed = Model.parseState(text())
       root.localReadSet = parsed.readIdentities
       if (parsed.items && parsed.items.length) {
-        root.items = Model.enrichArticles(parsed.items, root.configuredSubscriptions)
+        var pruned = Model.pruneArticlesByRetention(parsed.items, root.configuredRetentionDays)
+        root.items = Model.enrichArticles(pruned, root.configuredSubscriptions)
+      } else {
+        root.items = []
       }
       root.stateReady = true
       root.injectPanel()
