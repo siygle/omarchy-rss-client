@@ -1137,7 +1137,8 @@ function activateUrl(item) {
 
 function itemIdentity(item) {
   if (!item) return ""
-  return String(item.identity || "").trim()
+  if (typeof item === "string") return item.trim()
+  return String(item.identity || item.guid || item.id || item.link || "").trim()
 }
 
 function readIdentities(value) {
@@ -1153,7 +1154,7 @@ function isRead(readSet, item) {
   if (!id) return false
   var list = readSet || []
   for (var i = 0; i < list.length; i++) {
-    if (String(list[i]) === id) return true
+    if (String(list[i]).trim() === id) return true
   }
   return false
 }
