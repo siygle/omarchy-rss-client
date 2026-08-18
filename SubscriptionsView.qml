@@ -24,6 +24,21 @@ Item {
   property string statusMessage: ""
   property bool statusIsError: false
 
+  onVisibleChanged: {
+    if (!root.visible) {
+      root.statusMessage = ""
+      root.statusIsError = false
+      root.showAddComposer = false
+      root.draftUrl = ""
+      root.draftTitle = ""
+      root.draftCategory = ""
+      root.selectedCategory = ""
+      root.isCustomCategoryMode = false
+      root.categoryDropdownOpen = false
+      root.customCategoryText = ""
+    }
+  }
+
   signal backRequested()
   signal subscriptionsUpdated(var nextSubs)
 

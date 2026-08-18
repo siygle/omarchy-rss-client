@@ -40,8 +40,23 @@ Panel {
   readonly property color contentForeground: bar ? bar.foreground : Color.foreground
   readonly property string contentFontFamily: bar ? bar.fontFamily : Style.font.family
 
+  onOpenedChanged: {
+    if (!root.opened) {
+      root.shareStatus = ""
+      root.lastImportResult = null
+      if (root.hostWidget && typeof root.hostWidget.clearImportMessage === "function") {
+        root.hostWidget.clearImportMessage()
+      }
+    }
+  }
+
   function open() {
     root.currentView = "reader"
+    root.shareStatus = ""
+    root.lastImportResult = null
+    if (root.hostWidget && typeof root.hostWidget.clearImportMessage === "function") {
+      root.hostWidget.clearImportMessage()
+    }
     if (root.hostWidget) {
       root.subscriptions = root.hostWidget.configuredSubscriptions
       root.feedUrls = root.hostWidget.configuredFeedUrls
@@ -55,8 +70,8 @@ Panel {
       root.retentionDays = root.hostWidget.configuredRetentionDays
       root.unreadOnlyDefault = root.hostWidget.configuredUnreadOnlyDefault
       root.barSection = root.hostWidget.configuredBarSection
-      root.lastImportResult = root.hostWidget.lastImportResult
-      root.shareStatus = root.hostWidget.lastImportMessage
+      root.lastImportResult = null
+      root.shareStatus = ""
       root.isFetching = root.hostWidget.isFetching === true
       root.totalFeeds = root.hostWidget.totalFeeds
       root.completedFeeds = root.hostWidget.completedFeeds
@@ -66,6 +81,11 @@ Panel {
   }
 
   function close() {
+    root.shareStatus = ""
+    root.lastImportResult = null
+    if (root.hostWidget && typeof root.hostWidget.clearImportMessage === "function") {
+      root.hostWidget.clearImportMessage()
+    }
     root.controller.hide()
   }
 

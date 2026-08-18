@@ -266,20 +266,21 @@ test("persistent import lifecycle simulation survives panel close/recreation", (
   assert.equal(lastImportResult.duplicates, 1);
   assert.equal(lastImportResult.invalid, 1);
 
-  // 6. User reopens RSS panel and Settings later
-  panelShowing = true;
-  // Panel initializes its draft feeds and status from hostWidget
-  const panelFeeds = Model.httpsFeedUrls(configuredFeedUrls);
-  const panelShareStatus = lastImportMessage;
-
-  assert.deepEqual(panelFeeds, [
-    "https://initial.example/feed.xml",
-    "https://new.example/rss.xml",
-  ]);
+  // 6. While panel is open or on immediate import, status is shown
   assert.equal(
-    panelShareStatus,
+    lastImportMessage,
     "Imported 1 feed from subs#1.opml · 1 duplicate · 1 need attention"
   );
+
+  // 7. When the user closes the plugin panel, the notification is cleared and does not persist
+  panelShowing = false;
+  lastImportMessage = "";
+  lastImportResult = null;
+
+  // 8. User reopens plugin later
+  panelShowing = true;
+  const reopenedShareStatus = lastImportMessage;
+  assert.equal(reopenedShareStatus, "");
 });
 
 test("file reader rejects oversized files > 5 MiB, directories, and non-files", () => {

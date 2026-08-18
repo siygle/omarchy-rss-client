@@ -39,7 +39,7 @@ The RSS-Reeder plugin is structured into three primary layers:
 - **Feed Management & Persistence**:
   - Extracts all `xmlUrl` attributes (flat or nested in folder outlines), filters to HTTPS-only URLs, and merges them with existing feed URLs without duplicates.
   - Automatically persists merged feed lists to plugin settings, updates `lastImportResult`, and triggers an immediate fetch of all configured feeds.
-  - Restores the last import result message when Settings is reopened.
+  - Displays import result messages during the active session and automatically clears them once the plugin is closed.
 - **Verification**: Validates runtime QML, syntax checking with `qmllint`, manifest validation with `omarchy plugin validate .`, and unit test coverage via `node --test tests/*.mjs`.
 
 ## Development & Testing

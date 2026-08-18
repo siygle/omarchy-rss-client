@@ -126,7 +126,16 @@ BarWidget {
     if ("completedFeeds" in target) target.completedFeeds = root.completedFeeds
     if ("failedFeeds" in target) target.failedFeeds = root.failedFeeds
     if ("lastImportResult" in target) target.lastImportResult = root.lastImportResult
-    if ("shareStatus" in target && root.lastImportMessage) target.shareStatus = root.lastImportMessage
+    if ("shareStatus" in target) target.shareStatus = root.lastImportMessage || ""
+  }
+
+  function clearImportMessage() {
+    root.lastImportMessage = ""
+    root.lastImportResult = null
+    if (panelLoader.item) {
+      panelLoader.item.shareStatus = ""
+      panelLoader.item.lastImportResult = null
+    }
   }
 
   function persistSettings(values) {
@@ -600,6 +609,7 @@ BarWidget {
   }
 
   function close() {
+    root.clearImportMessage()
     if (panelLoader.item) panelLoader.item.close()
   }
 
@@ -608,6 +618,7 @@ BarWidget {
   }
 
   function closeForPopoutSwitch() {
+    root.clearImportMessage()
     if (panelLoader.item) panelLoader.item.closeForPopoutSwitch()
   }
 
