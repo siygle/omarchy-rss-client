@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<rss version="2.0">
+  <channel>
+    <title>Example Blog</title>
+    <link>https://example.com/</link>
+    <description>Demo</description>
+    <item>
+      <title>Newest post</title>
+      <link>https://example.com/newest</link>
+      <guid>https://example.com/newest</guid>
+      <pubDate>Mon, 17 Aug 2026 12:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Older post</title>
+      <link>https://example.com/older</link>
+      <guid isPermaLink="false">older-1</guid>
+      <pubDate>Sun, 16 Aug 2026 12:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <description>&lt;p&gt;Only &lt;b&gt;HTML&lt;/b&gt; body here&lt;/p&gt;</description>
+      <link>https://example.com/html-only</link>
+      <pubDate>Sat, 15 Aug 2026 12:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>No date</title>
+      <guid>no-date-1</guid>
+    </item>
+    <item>
+      <title>Unlistable</title>
+      <description>Neither guid nor link</description>
+    </item>
+  </channel>
+</rss>
