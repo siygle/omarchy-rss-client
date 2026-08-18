@@ -17,6 +17,9 @@ Item {
   property string draftTitle: ""
   property string draftCategory: ""
 
+  property string statusMessage: ""
+  property bool statusIsError: false
+
   signal backRequested()
   signal subscriptionsUpdated(var nextSubs)
 
@@ -34,30 +37,27 @@ Item {
   }
 
   function addFeed() {
-    var url = String(root.draftUrl || "").trim()
-    if (!Model.isHttpsUrl(url)) return
-
-    var title = String(root.draftTitle || "").trim() || Model.extractDomainTitle(url)
-    var cat = String(root.draftCategory || "").trim()
-    var catPath = cat ? [cat] : []
-
-    var newSub = {
-      url: url,
-      title: title,
-      categoryPath: catPath,
-      category: cat,
-      enabled: true
+    console.log("[RSS-REEDER] addFeed entered with draftUrl:", root.draftUrl)
+    var res = Model.addSubscription(root.subscriptions, root.draftUrl, root.draftTitle, root.draftCategory)
+    if (!res.ok) {
+      console.log("[RSS-REEDER] addFeed failed:", res.error)
+      root.statusMessage = res.error
+      root.statusIsError = true
+      return
     }
 
-    var next = Model.mergeSubscriptions(root.subscriptions, [newSub])
-    root.subscriptions = next
-    if (root.hostWidget && typeof root.hostWidget.updateSubscriptions === "function") {
-      root.hostWidget.updateSubscriptions(next)
-    }
+    console.log("[RSS-REEDER] addFeed success, new count:", res.subscriptions.length)
+    root.statusMessage = "Added " + (res.newSub.title || res.newSub.url)
+    root.statusIsError = false
     root.draftUrl = ""
     root.draftTitle = ""
     root.draftCategory = ""
     root.showAddComposer = false
+
+    if (root.hostWidget && typeof root.hostWidget.updateSubscriptions === "function") {
+      root.hostWidget.updateSubscriptions(res.subscriptions)
+    }
+    root.subscriptionsUpdated(res.subscriptions)
   }
 
   function toggleSubEnabled(sub) {
@@ -76,22 +76,21 @@ Item {
         next.push(s)
       }
     }
-    root.subscriptions = next
     if (root.hostWidget && typeof root.hostWidget.updateSubscriptions === "function") {
       root.hostWidget.updateSubscriptions(next)
     }
+    root.subscriptionsUpdated(next)
   }
 
   function removeSub(sub) {
-    var next = []
-    for (var i = 0; i < root.subscriptions.length; i++) {
-      if (root.subscriptions[i].url !== sub.url) {
-        next.push(root.subscriptions[i])
+    var res = Model.removeSubscription(root.subscriptions, sub.url)
+    if (res.ok) {
+      root.statusMessage = "Removed " + (sub.title || sub.url)
+      root.statusIsError = false
+      if (root.hostWidget && typeof root.hostWidget.updateSubscriptions === "function") {
+        root.hostWidget.updateSubscriptions(res.subscriptions)
       }
-    }
-    root.subscriptions = next
-    if (root.hostWidget && typeof root.hostWidget.updateSubscriptions === "function") {
-      root.hostWidget.updateSubscriptions(next)
+      root.subscriptionsUpdated(res.subscriptions)
     }
   }
 
@@ -193,7 +192,43 @@ Item {
           anchors.fill: parent
           hoverEnabled: true
           cursorShape: Qt.PointingHandCursor
-          onClicked: root.showAddComposer = !root.showAddComposer
+          onClicked: {
+            root.showAddComposer = !root.showAddComposer
+            root.statusMessage = ""
+          }
+        }
+      }
+    }
+
+    // Status / Feedback Banner
+    Rectangle {
+      visible: Boolean(root.statusMessage)
+      width: parent.width
+      height: Style.space(24)
+      radius: Style.space(4)
+      color: root.statusIsError ? Qt.rgba(1.0, 0.2, 0.2, 0.12) : Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.12)
+      border.color: root.statusIsError ? Qt.rgba(1.0, 0.2, 0.2, 0.35) : Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.35)
+      border.width: 1
+
+      Row {
+        anchors.centerIn: parent
+        spacing: Style.space(6)
+
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          text: root.statusIsError ? "󰅚" : "󰄬"
+          font.family: root.contentFontFamily
+          font.pixelSize: Style.font.caption
+          color: root.statusIsError ? "#ff6b6b" : Color.accent
+        }
+
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          text: root.statusMessage
+          font.family: root.contentFontFamily
+          font.pixelSize: Style.font.caption
+          font.bold: true
+          color: root.statusIsError ? "#ff6b6b" : Color.accent
         }
       }
     }
@@ -230,7 +265,13 @@ Item {
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.body
             color: root.contentForeground
-            onTextChanged: root.draftUrl = text
+            onTextChanged: {
+              root.draftUrl = text
+              if (root.statusIsError) root.statusMessage = ""
+            }
+            onAccepted: root.addFeed()
+            Keys.onReturnPressed: root.addFeed()
+            Keys.onEnterPressed: root.addFeed()
             selectByMouse: true
 
             Text {
@@ -266,6 +307,9 @@ Item {
               font.pixelSize: Style.font.body
               color: root.contentForeground
               onTextChanged: root.draftTitle = text
+              onAccepted: root.addFeed()
+              Keys.onReturnPressed: root.addFeed()
+              Keys.onEnterPressed: root.addFeed()
               selectByMouse: true
 
               Text {
@@ -296,6 +340,9 @@ Item {
               font.pixelSize: Style.font.body
               color: root.contentForeground
               onTextChanged: root.draftCategory = text
+              onAccepted: root.addFeed()
+              Keys.onReturnPressed: root.addFeed()
+              Keys.onEnterPressed: root.addFeed()
               selectByMouse: true
 
               Text {
@@ -313,8 +360,9 @@ Item {
             width: Style.space(80)
             height: Style.space(28)
             radius: Style.space(4)
-            color: Model.isHttpsUrl(root.draftUrl) ? Color.accent : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.1)
-            opacity: Model.isHttpsUrl(root.draftUrl) ? 1.0 : 0.4
+            readonly property bool canSave: Boolean(String(root.draftUrl || "").trim())
+            color: canSave ? Color.accent : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.1)
+            opacity: canSave ? 1.0 : 0.4
 
             Text {
               anchors.centerIn: parent
@@ -327,10 +375,8 @@ Item {
 
             MouseArea {
               anchors.fill: parent
-              cursorShape: Model.isHttpsUrl(root.draftUrl) ? Qt.PointingHandCursor : Qt.ArrowCursor
-              onClicked: {
-                if (Model.isHttpsUrl(root.draftUrl)) root.addFeed()
-              }
+              cursorShape: parent.canSave ? Qt.PointingHandCursor : Qt.ArrowCursor
+              onClicked: root.addFeed()
             }
           }
         }

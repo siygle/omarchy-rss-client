@@ -377,3 +377,59 @@ test("pruneArticlesByRetention preserves subscriptions and category structures u
   assert.equal(subs[0].category, "Linux");
   assert.equal(subs[1].category, "Tech");
 });
+
+test("normalizeFeedInputUrl trims and prefixes https if protocol omitted", () => {
+  assert.equal(Model.normalizeFeedInputUrl("  archlinux.org/feeds/news/  "), "https://archlinux.org/feeds/news/");
+  assert.equal(Model.normalizeFeedInputUrl("https://example.com/rss"), "https://example.com/rss");
+  assert.equal(Model.normalizeFeedInputUrl("http://example.com/rss"), "http://example.com/rss");
+  assert.equal(Model.normalizeFeedInputUrl(""), "");
+});
+
+test("addSubscription adds valid HTTPS subscription and handles duplicates/invalids", () => {
+  const initial = [
+    { url: "https://archlinux.org/feeds/news/", title: "Arch Linux", category: "Linux", categoryPath: ["Linux"], enabled: true }
+  ];
+
+  // 1. Successful add with custom title and category
+  const res1 = Model.addSubscription(initial, "https://news.ycombinator.com/rss", "Hacker News", "Tech");
+  assert.equal(res1.ok, true);
+  assert.equal(res1.subscriptions.length, 2);
+  assert.equal(res1.newSub.url, "https://news.ycombinator.com/rss");
+  assert.equal(res1.newSub.title, "Hacker News");
+  assert.equal(res1.newSub.category, "Tech");
+  assert.deepEqual(res1.newSub.categoryPath, ["Tech"]);
+
+  // 2. Duplicate detection
+  const resDup = Model.addSubscription(res1.subscriptions, "  https://archlinux.org/feeds/news/  ");
+  assert.equal(resDup.ok, false);
+  assert.equal(resDup.error, "Already subscribed");
+  assert.equal(resDup.subscriptions.length, 2);
+
+  // 3. Invalid URL detection
+  const resInv = Model.addSubscription(initial, "ftp://invalid-url/rss");
+  assert.equal(resInv.ok, false);
+  assert.equal(resInv.error, "Please enter a valid HTTPS feed URL");
+
+  // 4. URL normalization with omitted https://
+  const resAutoHttps = Model.addSubscription(initial, "lobste.rs/rss", "", "Tech");
+  assert.equal(resAutoHttps.ok, true);
+  assert.equal(resAutoHttps.newSub.url, "https://lobste.rs/rss");
+  assert.equal(resAutoHttps.newSub.title, "lobste.rs");
+});
+
+test("removeSubscription removes target subscription cleanly", () => {
+  const subs = [
+    { url: "https://archlinux.org/feeds/news/", title: "Arch" },
+    { url: "https://news.ycombinator.com/rss", title: "HN" }
+  ];
+
+  const res = Model.removeSubscription(subs, "https://archlinux.org/feeds/news/");
+  assert.equal(res.ok, true);
+  assert.equal(res.subscriptions.length, 1);
+  assert.equal(res.subscriptions[0].url, "https://news.ycombinator.com/rss");
+
+  const resNotFound = Model.removeSubscription(res.subscriptions, "https://unknown.com/rss");
+  assert.equal(resNotFound.ok, false);
+  assert.equal(resNotFound.subscriptions.length, 1);
+});
+

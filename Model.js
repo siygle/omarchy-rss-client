@@ -499,6 +499,59 @@ function mergeSubscriptions(current, incoming) {
   return out
 }
 
+function normalizeFeedInputUrl(input) {
+  var s = String(input || "").trim()
+  if (!s) return ""
+  if (s.indexOf("://") === -1) {
+    s = "https://" + s
+  }
+  return s
+}
+
+function addSubscription(subscriptions, inputUrl, inputTitle, inputCategory) {
+  var url = normalizeFeedInputUrl(inputUrl)
+  if (!isHttpsUrl(url)) {
+    return { ok: false, error: "Please enter a valid HTTPS feed URL", subscriptions: normalizeSubscriptions(subscriptions) }
+  }
+
+  var list = normalizeSubscriptions(subscriptions)
+  for (var i = 0; i < list.length; i++) {
+    if (String(list[i].url || "").trim().toLowerCase() === url.toLowerCase()) {
+      return { ok: false, error: "Already subscribed", subscriptions: list }
+    }
+  }
+
+  var title = String(inputTitle || "").trim() || extractDomainTitle(url)
+  var cat = String(inputCategory || "").trim()
+  var catPath = cat ? [cat] : []
+
+  var newSub = {
+    url: url,
+    title: title,
+    categoryPath: catPath,
+    category: cat,
+    enabled: true
+  }
+
+  var next = [newSub].concat(list)
+  return { ok: true, newSub: newSub, subscriptions: next }
+}
+
+function removeSubscription(subscriptions, targetUrl) {
+  var url = String(targetUrl || "").trim().toLowerCase()
+  var list = normalizeSubscriptions(subscriptions)
+  var next = []
+  var removed = null
+  for (var i = 0; i < list.length; i++) {
+    if (String(list[i].url || "").trim().toLowerCase() === url) {
+      removed = list[i]
+    } else {
+      next.push(list[i])
+    }
+  }
+  return { ok: removed !== null, removed: removed, subscriptions: next }
+}
+
 function calculateImportResult(currentSubs, parsedResult, filename) {
   var current = normalizeSubscriptions(currentSubs)
   var incoming = []
@@ -1202,6 +1255,9 @@ if (typeof module !== "undefined" && module.exports) {
     resolveUrl: resolveUrl,
     recentList: recentList,
     rowText: rowText,
+    normalizeFeedInputUrl: normalizeFeedInputUrl,
+    addSubscription: addSubscription,
+    removeSubscription: removeSubscription,
     DEFAULT_RETENTION_DAYS: DEFAULT_RETENTION_DAYS,
     MIN_RETENTION_DAYS: MIN_RETENTION_DAYS,
     MAX_RETENTION_DAYS: MAX_RETENTION_DAYS,
