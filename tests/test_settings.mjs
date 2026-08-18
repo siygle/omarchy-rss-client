@@ -13,10 +13,17 @@ test("bar section is left, center, or right", () => {
   assert.equal(Model.barSection("nope"), "right");
   assert.equal(
     Model.sectionFromLayout(
-      { left: [], center: [{ id: "io.github.rafaelvzago.rss" }], right: [] },
-      "io.github.rafaelvzago.rss"
+      { left: [], center: [{ id: "io.github.sanjyay.rss-reeder" }], right: [] },
+      "io.github.sanjyay.rss-reeder"
     ),
     "center"
+  );
+  assert.deepEqual(
+    Model.entryFromLayout(
+      { left: [], center: [{ id: "io.github.rafaelvzago.rss", feedUrls: "https://legacy.example/rss" }], right: [] },
+      ["io.github.sanjyay.rss-reeder", "io.github.rafaelvzago.rss"]
+    ),
+    { id: "io.github.rafaelvzago.rss", feedUrls: "https://legacy.example/rss" }
   );
 });
 

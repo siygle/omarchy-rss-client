@@ -1,11 +1,11 @@
-# Omarchy RSS plugin
+# RSS-Reeder plugin
 
-A bar-resident list of recent blog posts from RSS 2.0 feeds, with an always-visible unread cue. Built first for the author’s Omarchy desktop, shaped so a stranger can install it later.
+A compact native desktop RSS and Atom reader for Omarchy.
 
 ## Language
 
 **Plugin**:
-The installable Omarchy Quattro package people add from this repository. Permanent id is `io.github.rafaelvzago.rss`. Display name is **RSS**. First ship is the author’s machine; the package is still marketplace-shaped. Only one bar-widget instance. Default bar section is right.
+The installable Omarchy Quattro package people add from this repository. Permanent id is `io.github.sanjyay.rss-reeder`. Display name is **RSS-Reeder**. Only one bar-widget instance. Default bar section is right.
 _Avoid_: applet, extension, widget-only, theme, `omarchy.*`, `rafaelvzago.rss` as the published id, Feeds, Blog posts
 
 **Bar widget**:

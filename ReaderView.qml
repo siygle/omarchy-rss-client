@@ -146,7 +146,7 @@ Item {
       }
 
       Text {
-        text: "RSS"
+        text: "RSS-Reeder"
         font.family: root.contentFontFamily
         font.pixelSize: Style.font.subtitle
         font.bold: true

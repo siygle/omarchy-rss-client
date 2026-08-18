@@ -7,9 +7,27 @@ import "Model.js" as Model
 
 BarWidget {
   id: root
-  moduleName: "io.github.rafaelvzago.rss"
+  moduleName: "io.github.sanjyay.rss-reeder"
 
-  readonly property var configuredSubscriptions: Model.normalizeSubscriptions(setting("subscriptions", ""), setting("feedUrls", ""))
+  readonly property var legacySettings: {
+    var fromLayout = Model.entryFromLayout(root.bar && root.bar.layoutConfig, [
+      "io.github.sanjyay.rss-reeder",
+      "io.github.sanjyay.rssreeder",
+      "io.github.rafaelvzago.rss"
+    ])
+    return fromLayout || ({})
+  }
+
+  function getSetting(key, fallback) {
+    var val = setting(key, undefined)
+    if (val !== undefined && val !== null) return val
+    if (root.legacySettings && root.legacySettings[key] !== undefined && root.legacySettings[key] !== null) {
+      return root.legacySettings[key]
+    }
+    return fallback
+  }
+
+  readonly property var configuredSubscriptions: Model.normalizeSubscriptions(getSetting("subscriptions", ""), getSetting("feedUrls", ""))
   readonly property var configuredFeedUrls: {
     var urls = []
     for (var i = 0; i < configuredSubscriptions.length; i++) {
@@ -34,21 +52,23 @@ BarWidget {
     return map
   }
   readonly property int configuredMaxItemsPerFeed: {
-    var raw = setting("maxItemsPerFeed", null)
+    var raw = getSetting("maxItemsPerFeed", null)
     if (raw === undefined || raw === null || raw === "")
-      return Model.maxItemsPerFeed(setting("recentListSize", 10))
+      return Model.maxItemsPerFeed(getSetting("recentListSize", 10))
     return Model.maxItemsPerFeed(raw)
   }
-  readonly property int configuredPollIntervalMinutes: Model.pollIntervalMinutes(setting("pollIntervalMinutes", 15))
-  readonly property int configuredItemsPerPage: Model.pageSize(setting("itemsPerPage", 10))
-  readonly property int configuredRetentionDays: Model.normalizeRetentionDays(setting("retentionDays", setting("feedRetentionDays", 30)))
-  readonly property bool configuredUnreadOnlyDefault: setting("unreadOnlyDefault", false) === true
+  readonly property int configuredPollIntervalMinutes: Model.pollIntervalMinutes(getSetting("pollIntervalMinutes", 15))
+  readonly property int configuredItemsPerPage: Model.pageSize(getSetting("itemsPerPage", 10))
+  readonly property int configuredRetentionDays: Model.normalizeRetentionDays(getSetting("retentionDays", getSetting("feedRetentionDays", 30)))
+  readonly property bool configuredUnreadOnlyDefault: getSetting("unreadOnlyDefault", false) === true
   readonly property string configuredBarSection: {
     var fromLayout = Model.sectionFromLayout(root.bar && root.bar.layoutConfig, root.moduleName)
     if (fromLayout) return fromLayout
-    return Model.barSection(setting("barSection", "right"))
+    var legacyFromLayout = Model.sectionFromLayout(root.bar && root.bar.layoutConfig, "io.github.rafaelvzago.rss")
+    if (legacyFromLayout) return legacyFromLayout
+    return Model.barSection(getSetting("barSection", "right"))
   }
-  readonly property var settingsReadSet: Model.readIdentities(setting("readIdentities", ""))
+  readonly property var settingsReadSet: Model.readIdentities(getSetting("readIdentities", ""))
   property var localReadSet: []
   readonly property var readSet: {
     var next = Model.readIdentities(Model.serializeReadIdentities(root.localReadSet))
@@ -60,7 +80,7 @@ BarWidget {
   readonly property int badgeCount: Model.unreadCount(root.items, root.readSet)
   readonly property string statePath: {
     var home = Quickshell.env("HOME") || ""
-    return home + "/.local/share/omarchy-rss-plugin/state.json"
+    return home + "/.local/share/omarchy-rss-reeder/state.json"
   }
   property var items: []
   property var pendingUrls: []
@@ -450,7 +470,10 @@ BarWidget {
 
   Process {
     id: mkdirProcess
-    command: ["mkdir", "-p", String(Quickshell.env("HOME") || "") + "/.local/share/omarchy-rss-plugin"]
+    command: [
+      "sh", "-c",
+      "mkdir -p \"$HOME/.local/share/omarchy-rss-reeder\"; if [ ! -f \"$HOME/.local/share/omarchy-rss-reeder/state.json\" ] && [ -f \"$HOME/.local/share/omarchy-rss-plugin/state.json\" ]; then cp \"$HOME/.local/share/omarchy-rss-plugin/state.json\" \"$HOME/.local/share/omarchy-rss-reeder/state.json\"; fi"
+    ]
     onExited: stateFile.reload()
   }
 
@@ -592,21 +615,9 @@ BarWidget {
     anchors.fill: parent
     bar: root.bar
     text: "󰑫"
-    tooltipText: root.badgeCount > 0 ? ("RSS · " + root.badgeCount + " unread") : "RSS"
+    tooltipText: root.badgeCount > 0 ? ("RSS-Reeder · " + root.badgeCount + " unread") : "RSS-Reeder"
     onPressed: function(buttonCode) {
       if (buttonCode === Qt.LeftButton) root.togglePanel()
-    }
-
-    Rectangle {
-      visible: root.badgeCount > 0
-      anchors.right: parent.right
-      anchors.bottom: parent.bottom
-      anchors.rightMargin: 1
-      anchors.bottomMargin: 1
-      width: Style.space(4)
-      height: width
-      radius: width / 2
-      color: Color.accent
     }
   }
 }

@@ -19,6 +19,24 @@ function sectionFromLayout(layout, id) {
   return ""
 }
 
+function entryFromLayout(layout, ids) {
+  var idList = Array.isArray(ids) ? ids : [ids]
+  var sections = ["left", "center", "right"]
+  if (!layout) return null
+  for (var s = 0; s < sections.length; s++) {
+    var entries = layout[sections[s]] || []
+    for (var i = 0; i < entries.length; i++) {
+      var entry = entries[i]
+      if (entry && typeof entry === "object") {
+        for (var k = 0; k < idList.length; k++) {
+          if (String(entry.id || "") === String(idList[k] || "")) return entry
+        }
+      }
+    }
+  }
+  return null
+}
+
 function pollIntervalMinutes(value) {
   var n = Number(value)
   if (value === undefined || value === null || value === "" || !isFinite(n)) return 15
@@ -1124,6 +1142,7 @@ if (typeof module !== "undefined" && module.exports) {
     pollIntervalMinutes: pollIntervalMinutes,
     barSection: barSection,
     sectionFromLayout: sectionFromLayout,
+    entryFromLayout: entryFromLayout,
     recentListSize: recentListSize,
     maxItemsPerFeed: maxItemsPerFeed,
     unreadCount: unreadCount,

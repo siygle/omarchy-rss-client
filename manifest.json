@@ -1,18 +1,18 @@
 {
   "schemaVersion": 1,
-  "id": "io.github.rafaelvzago.rss",
-  "name": "RSS",
+  "id": "io.github.sanjyay.rss-reeder",
+  "name": "RSS-Reeder",
   "version": "0.1.0",
-  "author": "Rafael Vzago",
+  "author": "Sanjyay",
   "license": "MIT",
-  "description": "Recent posts from RSS 2.0 feeds, with an unread count on the Omarchy bar.",
+  "description": "Compact desktop RSS & Atom reader for Omarchy.",
   "kinds": ["bar-widget"],
   "entryPoints": {
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
-    "displayName": "RSS",
-    "description": "Recent posts from RSS 2.0 feeds, with an unread count on the Omarchy bar.",
+    "displayName": "RSS-Reeder",
+    "description": "Compact desktop RSS & Atom reader for Omarchy.",
     "category": "News",
     "allowMultiple": false,
     "defaultSection": "right",
