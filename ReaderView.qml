@@ -21,9 +21,9 @@ Item {
   property string currentCategory: "all"
   property bool unreadOnly: unreadOnlyDefault
   property string searchQuery: ""
-  property bool drawerOpen: false
-  property int selectedIndex: 0
   property int currentPage: 0
+  property int selectedIndex: 0
+  property bool drawerOpen: false
 
   signal openSettingsRequested()
   signal refreshRequested()

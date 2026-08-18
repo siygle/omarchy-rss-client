@@ -5,15 +5,15 @@
   "version": "0.1.0",
   "author": "Sanjyay",
   "license": "MIT",
-  "description": "Compact desktop RSS & Atom reader for Omarchy.",
+  "description": "Native RSS and Atom reader for the Omarchy bar with OPML, categories, search, unread tracking, and configurable retention.",
   "kinds": ["bar-widget"],
   "entryPoints": {
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
     "displayName": "RSS-Reeder",
-    "description": "Compact desktop RSS & Atom reader for Omarchy.",
-    "category": "News",
+    "description": "Native RSS and Atom reader for the Omarchy bar with OPML, categories, search, unread tracking, and configurable retention.",
+    "category": "Productivity",
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {

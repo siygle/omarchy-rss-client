@@ -485,7 +485,7 @@ BarWidget {
       "--max-redirs", "5",
       "--max-filesize", String(Model.maxFeedBytes()),
       "--max-time", "20",
-      "-A", "omarchy-rss-plugin/0.1",
+      "-A", "omarchy-rss-reeder/0.1.0",
       "-H", "Accept: application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.9, text/html;q=0.8",
       "-w", "\n__OMARCHY_CT__:%{content_type}",
       next
