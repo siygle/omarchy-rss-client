@@ -157,6 +157,7 @@ Panel {
   }
 
   function selectOpmlFile() {
+    console.log("[RSS-D696463-LIVE] selectOpmlFile clicked in Panel.qml")
     if (root.hostWidget && typeof root.hostWidget.requestOpmlFileImport === "function") {
       root.hostWidget.requestOpmlFileImport()
     } else if (root.hostWidget && typeof root.hostWidget.selectOpmlFile === "function") {

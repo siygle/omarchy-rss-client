@@ -104,7 +104,9 @@ BarWidget {
   function requestOpmlFileImport() {
     if (opmlSelectProcess.running || opmlValidateAndReadProcess.running) return
     root.selectedOpmlPath = ""
-    console.log("[RSS] requestOpmlFileImport: opening file selector")
+    console.log("[RSS-D696463-LIVE] requestOpmlFileImport entered")
+    console.log("[RSS-D696463-LIVE] command passed to omarchy-file-select:", JSON.stringify(opmlSelectProcess.command))
+    console.log("[RSS-D696463-LIVE] process started: opmlSelectProcess")
     opmlSelectProcess.running = true
   }
 
@@ -115,9 +117,10 @@ BarWidget {
   function handleSelectedOpmlFile(fileUrlOrPath) {
     var raw = String(fileUrlOrPath || "").trim()
     if (!raw) return
+    console.log("[RSS-D696463-LIVE] handleSelectedOpmlFile entered with raw path/url:", JSON.stringify(raw))
     var resolvedPath = Model.filePathFromUrl(raw)
     if (!resolvedPath) return
-    console.log("[RSS] handleSelectedOpmlFile: reading file:", resolvedPath)
+    console.log("[RSS-D696463-LIVE] normalized selected path:", resolvedPath)
     root.selectedOpmlPath = resolvedPath
     opmlValidateAndReadProcess.sourcePath = resolvedPath
     opmlValidateAndReadProcess.command = [
@@ -141,6 +144,7 @@ BarWidget {
       "    sys.stdout.buffer.write(f.read())\n",
       resolvedPath
     ]
+    console.log("[RSS-D696463-LIVE] validation reader started for:", resolvedPath)
     opmlValidateAndReadProcess.running = true
   }
 
@@ -392,8 +396,9 @@ BarWidget {
   Process {
     id: fetchProcess
     stdout: StdioCollector {
+      id: fetchStdout
       waitForEnd: true
-      onStreamFinished: root.applyBody(text)
+      onStreamFinished: root.applyBody(fetchStdout.text)
     }
     onExited: function() {
       if (root.restartWhenIdle) {
@@ -408,14 +413,17 @@ BarWidget {
     id: opmlSelectProcess
     command: ["omarchy-file-select", "--title", "Select OPML file", "--extensions", "opml xml"]
     stdout: StdioCollector {
+      id: opmlSelectStdout
       waitForEnd: true
-      onStreamFinished: function(text) {
-        var path = String(text || "").trim()
+      onStreamFinished: {
+        console.log("[RSS-D696463-LIVE] raw stdout: " + JSON.stringify(opmlSelectStdout.text))
+        var path = String(opmlSelectStdout.text || "").trim()
         if (path) root.selectedOpmlPath = path
       }
     }
     onExited: function(exitCode) {
-      console.log("[RSS] opmlSelectProcess exited with code:", exitCode, "path:", root.selectedOpmlPath)
+      console.log("[RSS-D696463-LIVE] process exited: opmlSelectProcess, exit code: " + exitCode)
+      console.log("[RSS-D696463-LIVE] raw selected path: " + JSON.stringify(root.selectedOpmlPath))
       if (exitCode === 0 && root.selectedOpmlPath) {
         root.handleSelectedOpmlFile(root.selectedOpmlPath)
       }
@@ -434,7 +442,7 @@ BarWidget {
       waitForEnd: true
     }
     onExited: function(exitCode) {
-      console.log("[RSS] opmlValidateAndReadProcess exited with code:", exitCode)
+      console.log("[RSS-D696463-LIVE] validation reader exit code: " + exitCode)
       if (exitCode !== 0) {
         var err = String(opmlStderr.text || "").trim() || "Failed to read file"
         root.lastImportResult = {
@@ -452,6 +460,7 @@ BarWidget {
         return
       }
       var content = String(opmlStdout.text || "")
+      console.log("[RSS-D696463-LIVE] parser entered with payload length: " + content.length)
       var filename = Model.filenameFromPath(opmlValidateAndReadProcess.sourcePath)
       var parseDetails = Model.parseOpmlDetails(content)
       if (!parseDetails.feeds.length) {
@@ -459,12 +468,13 @@ BarWidget {
         parseDetails = { feeds: parsed, invalidCount: 0, totalFound: parsed.length }
       }
       var result = Model.calculateImportResult(root.configuredFeedUrls, parseDetails, filename)
-      console.log("[RSS] import completed:", JSON.stringify(result))
+      console.log("[RSS-D696463-LIVE] parsed count: " + parseDetails.feeds.length + ", result: " + JSON.stringify(result))
       root.lastImportResult = result
       root.lastImportMessage = result.message
       if (result.status === "success" && result.imported > 0) {
         persistSettings({ feedUrls: Model.serializeFeedUrls(result.newFeeds) })
         fetchFeed()
+        console.log("[RSS-D696463-LIVE] persisted feed count: " + result.newFeeds.length)
       }
       if (panelLoader.item) {
         panelLoader.item.feedUrls = Model.httpsFeedUrls(Model.serializeFeedUrls(root.configuredFeedUrls))
