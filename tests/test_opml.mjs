@@ -376,3 +376,147 @@ test("file reader rejects oversized files > 5 MiB, directories, and non-files", 
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 });
+
+test("parseOpmlStructured preserves category folders, nested categoryPath, and feed titles", () => {
+  const opml = `<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head><title>My Feeds</title></head>
+  <body>
+    <outline text="Technology" title="Technology">
+      <outline text="Linux" title="Linux">
+        <outline text="Arch Linux News" title="Arch Linux News" type="rss" xmlUrl="https://archlinux.org/feeds/news/"/>
+        <outline text="Kernel" type="rss" xmlUrl="https://kernel.org/feed.xml"/>
+      </outline>
+      <outline text="Rust Blog" type="rss" xmlUrl="https://blog.rust-lang.org/feed.xml"/>
+    </outline>
+    <outline text="News" title="News">
+      <outline text="The Hindu" type="rss" xmlUrl="https://www.thehindu.com/feeder/default.rss"/>
+    </outline>
+    <outline text="Top Flat Feed" type="rss" xmlUrl="https://example.com/rss"/>
+  </body>
+</opml>`;
+
+  const res = Model.parseOpmlStructured(opml);
+  assert.equal(res.totalFound, 5);
+  assert.equal(res.subscriptions.length, 5);
+  assert.deepEqual(res.categories, ["Technology", "Linux", "News"]);
+
+  // Check nested categoryPath
+  const arch = res.subscriptions.find((s) => s.url === "https://archlinux.org/feeds/news/");
+  assert.ok(arch);
+  assert.equal(arch.title, "Arch Linux News");
+  assert.deepEqual(arch.categoryPath, ["Technology", "Linux"]);
+  assert.equal(arch.category, "Linux");
+
+  const rust = res.subscriptions.find((s) => s.url === "https://blog.rust-lang.org/feed.xml");
+  assert.ok(rust);
+  assert.deepEqual(rust.categoryPath, ["Technology"]);
+  assert.equal(rust.category, "Technology");
+
+  const flat = res.subscriptions.find((s) => s.url === "https://example.com/rss");
+  assert.ok(flat);
+  assert.deepEqual(flat.categoryPath, []);
+  assert.equal(flat.category, "");
+});
+
+test("normalizeSubscriptions handles legacy flat feedUrls migration cleanly", () => {
+  const legacyUrls = "https://archlinux.org/feeds/news/\nhttps://news.ycombinator.com/rss\n";
+  const subs = Model.normalizeSubscriptions([], legacyUrls);
+  assert.equal(subs.length, 2);
+  assert.equal(subs[0].url, "https://archlinux.org/feeds/news/");
+  assert.equal(subs[0].title, "archlinux.org");
+  assert.equal(subs[0].enabled, true);
+  assert.deepEqual(subs[0].categoryPath, []);
+});
+
+test("mergeSubscriptions preserves categories and deduplicates by URL", () => {
+  const existing = [
+    { url: "https://archlinux.org/feeds/news/", title: "Arch", categoryPath: [], category: "", enabled: true }
+  ];
+  const incoming = [
+    { url: "https://archlinux.org/feeds/news/", title: "Arch Linux News", categoryPath: ["Linux"], category: "Linux", enabled: true },
+    { url: "https://kernel.org/feed.xml", title: "Kernel", categoryPath: ["Linux"], category: "Linux", enabled: true }
+  ];
+
+  const merged = Model.mergeSubscriptions(existing, incoming);
+  assert.equal(merged.length, 2);
+  // Existing subscription's category was enriched
+  assert.equal(merged[0].url, "https://archlinux.org/feeds/news/");
+  assert.equal(merged[0].category, "Linux");
+  assert.deepEqual(merged[0].categoryPath, ["Linux"]);
+  assert.equal(merged[1].url, "https://kernel.org/feed.xml");
+});
+
+test("extractCategories calculates accurate category article and unread counts", () => {
+  const subs = [
+    { url: "https://archlinux.org/rss", title: "Arch", category: "Linux", categoryPath: ["Linux"], enabled: true },
+    { url: "https://thehindu.com/rss", title: "The Hindu", category: "News", categoryPath: ["News"], enabled: true }
+  ];
+  const articles = [
+    { identity: "a1", feedUrl: "https://archlinux.org/rss", title: "Arch 1" },
+    { identity: "a2", feedUrl: "https://archlinux.org/rss", title: "Arch 2" },
+    { identity: "n1", feedUrl: "https://thehindu.com/rss", title: "News 1" }
+  ];
+  const readSet = ["a1"];
+
+  const cats = Model.extractCategories(subs, articles, readSet);
+  assert.equal(cats.length, 3); // All, Linux, News
+
+  const allCat = cats.find((c) => c.id === "all");
+  assert.equal(allCat.count, 3);
+  assert.equal(allCat.unreadCount, 2);
+
+  const linuxCat = cats.find((c) => c.id === "Linux");
+  assert.equal(linuxCat.count, 2);
+  assert.equal(linuxCat.unreadCount, 1);
+
+  const newsCat = cats.find((c) => c.id === "News");
+  assert.equal(newsCat.count, 1);
+  assert.equal(newsCat.unreadCount, 1);
+});
+
+test("filterReaderArticles filters simultaneously by category, unreadOnly, and search query", () => {
+  const articles = [
+    { identity: "1", title: "Linux 6.17 Released", feedUrl: "https://arch.org", feedName: "Arch Linux", category: "Linux" },
+    { identity: "2", title: "Fedora 41 Details", feedUrl: "https://fedora.org", feedName: "Fedora", category: "Linux" },
+    { identity: "3", title: "Markets Rally Today", feedUrl: "https://finance.org", feedName: "Finance News", category: "Finance" }
+  ];
+  const readSet = ["1"];
+
+  // 1. Filter by category
+  const linuxOnly = Model.filterReaderArticles(articles, { category: "Linux", readSet });
+  assert.equal(linuxOnly.length, 2);
+
+  // 2. Filter by category + unreadOnly
+  const unreadLinux = Model.filterReaderArticles(articles, { category: "Linux", unreadOnly: true, readSet });
+  assert.equal(unreadLinux.length, 1);
+  assert.equal(unreadLinux[0].identity, "2");
+
+  // 3. Filter by category + unreadOnly + search
+  const searched = Model.filterReaderArticles(articles, { category: "Linux", unreadOnly: true, search: "Fedora", readSet });
+  assert.equal(searched.length, 1);
+  assert.equal(searched[0].identity, "2");
+
+  // 4. Search with no matches
+  const none = Model.filterReaderArticles(articles, { category: "Linux", search: "Markets", readSet });
+  assert.equal(none.length, 0);
+});
+
+test("generateOpml exports subscriptions with categories and flat feeds", () => {
+  const subs = [
+    { url: "https://archlinux.org/feed", title: "Arch Linux", category: "Linux", categoryPath: ["Linux"], enabled: true },
+    { url: "https://example.com/rss", title: "Example Feed", category: "", categoryPath: [], enabled: true }
+  ];
+
+  const opml = Model.generateOpml(subs);
+  assert.match(opml, /<opml version="2\.0">/);
+  assert.match(opml, /<outline text="Linux" title="Linux">/);
+  assert.match(opml, /xmlUrl="https:\/\/archlinux\.org\/feed"/);
+  assert.match(opml, /xmlUrl="https:\/\/example\.com\/rss"/);
+
+  // Parse back to verify round-trip
+  const parsed = Model.parseOpmlStructured(opml);
+  assert.equal(parsed.subscriptions.length, 2);
+  assert.deepEqual(parsed.categories, ["Linux"]);
+});
+

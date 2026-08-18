@@ -201,27 +201,197 @@ function filenameFromPath(filePath) {
   return raw.replace(/^.*[\\\/]/, "")
 }
 
-function parseOpmlDetails(text) {
-  var raw = String(text || "").trim()
-  if (!raw) return { feeds: [], invalidCount: 0, totalFound: 0 }
-  var valid = []
-  var invalid = 0
-  var total = 0
-  var re = /xmlUrl\s*=\s*["']([^"']+)["']/gi
-  var match
-  while ((match = re.exec(raw))) {
-    total++
-    var url = decodeEntities(match[1]).trim()
-    if (isHttpsUrl(url)) {
-      valid.push(url)
-    } else {
-      invalid++
+function extractDomainTitle(url) {
+  var str = String(url || "").trim()
+  if (!str) return ""
+  try {
+    var match = /^https?:\/\/([^\/?#]+)/i.exec(str)
+    if (match && match[1]) {
+      return match[1].replace(/^www\./i, "")
+    }
+  } catch (e) {}
+  return str
+}
+
+function escapeXml(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;")
+}
+
+function normalizeSubscriptions(rawSubscriptions, rawFeedUrls) {
+  var subs = []
+  if (typeof rawSubscriptions === "string") {
+    var trimmed = rawSubscriptions.trim()
+    if (trimmed.indexOf("[") === 0) {
+      try {
+        var parsed = JSON.parse(trimmed)
+        if (Array.isArray(parsed)) subs = parsed
+      } catch (e) {}
+    }
+  } else if (Array.isArray(rawSubscriptions)) {
+    subs = rawSubscriptions.slice()
+  }
+
+  var existingMap = {}
+  var out = []
+  for (var i = 0; i < subs.length; i++) {
+    var s = subs[i]
+    if (s && typeof s === "object" && isHttpsUrl(s.url)) {
+      var u = String(s.url || "").trim()
+      if (!existingMap[u]) {
+        var catPath = Array.isArray(s.categoryPath)
+          ? s.categoryPath.map(function(c) { return String(c || "").trim() }).filter(Boolean)
+          : (s.category ? [String(s.category).trim()] : [])
+        var normSub = {
+          url: u,
+          title: String(s.title || extractDomainTitle(u)).trim() || extractDomainTitle(u),
+          categoryPath: catPath,
+          category: catPath.length ? catPath[catPath.length - 1] : "",
+          enabled: s.enabled !== false
+        }
+        existingMap[u] = normSub
+        out.push(normSub)
+      }
+    } else if (typeof s === "string" && isHttpsUrl(s)) {
+      var uStr = s.trim()
+      if (!existingMap[uStr]) {
+        var plainSub = {
+          url: uStr,
+          title: extractDomainTitle(uStr),
+          categoryPath: [],
+          category: "",
+          enabled: true
+        }
+        existingMap[uStr] = plainSub
+        out.push(plainSub)
+      }
     }
   }
+
+  // Migration from legacy rawFeedUrls
+  var fallbackUrls = httpsFeedUrls(rawFeedUrls)
+  for (var j = 0; j < fallbackUrls.length; j++) {
+    var url = fallbackUrls[j]
+    if (!existingMap[url]) {
+      var newSub = {
+        url: url,
+        title: extractDomainTitle(url),
+        categoryPath: [],
+        category: "",
+        enabled: true
+      }
+      existingMap[url] = newSub
+      out.push(newSub)
+    }
+  }
+
+  return out
+}
+
+function serializeSubscriptions(subscriptions) {
+  return JSON.stringify(normalizeSubscriptions(subscriptions))
+}
+
+function getXmlAttr(attrs, name) {
+  var re = new RegExp(name + "\\s*=\\s*([\"'])([\\s\\S]*?)\\1", "i")
+  var m = re.exec(attrs)
+  return m ? decodeEntities(m[2]).trim() : ""
+}
+
+function parseOpmlStructured(text) {
+  var raw = String(text || "").trim()
+  if (!raw) return { subscriptions: [], categories: [], totalFound: 0, invalidCount: 0 }
+
+  var subscriptions = []
+  var categoryStack = []
+  var invalidCount = 0
+  var totalFound = 0
+
+  var tagRe = /<\/?outline\b([^>]*?)(\/?)>/gi
+  var match
+
+  while ((match = tagRe.exec(raw))) {
+    var fullMatch = match[0]
+    var attrs = match[1] || ""
+    var isSelfClosing = match[2] === "/" || fullMatch.indexOf("/>") !== -1
+    var isClosingTag = fullMatch.indexOf("</outline") === 0
+
+    if (isClosingTag) {
+      if (categoryStack.length > 0) {
+        categoryStack.pop()
+      }
+      continue
+    }
+
+    var xmlUrl = getXmlAttr(attrs, "xmlUrl")
+    var title = getXmlAttr(attrs, "title") || getXmlAttr(attrs, "text") || ""
+    var textAttr = getXmlAttr(attrs, "text") || getXmlAttr(attrs, "title") || ""
+
+    if (xmlUrl) {
+      totalFound++
+      if (isHttpsUrl(xmlUrl)) {
+        var catPath = categoryStack.filter(function(c) { return Boolean(c) })
+        subscriptions.push({
+          url: xmlUrl,
+          title: title || extractDomainTitle(xmlUrl),
+          categoryPath: catPath,
+          category: catPath.length ? catPath[catPath.length - 1] : "",
+          enabled: true
+        })
+      } else {
+        invalidCount++
+      }
+    }
+
+    if (!isSelfClosing) {
+      var catName = textAttr || title || ""
+      if (catName && !xmlUrl) {
+        categoryStack.push(catName)
+      } else if (!xmlUrl) {
+        categoryStack.push("Uncategorized")
+      } else {
+        categoryStack.push(null)
+      }
+    }
+  }
+
+  var catMap = {}
+  for (var i = 0; i < subscriptions.length; i++) {
+    var sub = subscriptions[i]
+    if (sub.categoryPath && sub.categoryPath.length) {
+      for (var c = 0; c < sub.categoryPath.length; c++) {
+        var cName = sub.categoryPath[c]
+        catMap[cName] = (catMap[cName] || 0) + 1
+      }
+    }
+  }
+
+  var categories = Object.keys(catMap)
+
   return {
-    feeds: valid,
-    invalidCount: invalid,
-    totalFound: total
+    subscriptions: subscriptions,
+    categories: categories,
+    totalFound: totalFound,
+    invalidCount: invalidCount
+  }
+}
+
+function parseOpmlDetails(text) {
+  var structured = parseOpmlStructured(text)
+  var validUrls = []
+  for (var i = 0; i < structured.subscriptions.length; i++) {
+    validUrls.push(structured.subscriptions[i].url)
+  }
+  return {
+    feeds: validUrls,
+    subscriptions: structured.subscriptions,
+    categories: structured.categories,
+    invalidCount: structured.invalidCount,
+    totalFound: structured.totalFound
   }
 }
 
@@ -229,29 +399,67 @@ function parseOpml(text) {
   return parseOpmlDetails(text).feeds
 }
 
-function calculateImportResult(currentFeeds, parsedResult, filename) {
-  var current = httpsFeedUrls(currentFeeds)
+function mergeSubscriptions(current, incoming) {
+  var existing = normalizeSubscriptions(current)
+  var inc = normalizeSubscriptions(incoming)
+  var map = {}
+  var out = []
+  for (var i = 0; i < existing.length; i++) {
+    map[existing[i].url] = existing[i]
+    out.push(existing[i])
+  }
+  for (var j = 0; j < inc.length; j++) {
+    var s = inc[j]
+    if (!map[s.url]) {
+      map[s.url] = s
+      out.push(s)
+    } else {
+      if ((!map[s.url].categoryPath || !map[s.url].categoryPath.length) && s.categoryPath && s.categoryPath.length) {
+        map[s.url].categoryPath = s.categoryPath
+        map[s.url].category = s.category
+      }
+      if (s.title && s.title !== s.url && (!map[s.url].title || map[s.url].title === map[s.url].url)) {
+        map[s.url].title = s.title
+      }
+    }
+  }
+  return out
+}
+
+function calculateImportResult(currentSubs, parsedResult, filename) {
+  var current = normalizeSubscriptions(currentSubs)
   var incoming = []
   var invalidCount = 0
-  if (parsedResult && typeof parsedResult === "object" && parsedResult.feeds) {
-    incoming = httpsFeedUrls(parsedResult.feeds)
+  var parsedCategories = []
+
+  if (parsedResult && typeof parsedResult === "object") {
+    if (parsedResult.subscriptions && Array.isArray(parsedResult.subscriptions)) {
+      incoming = normalizeSubscriptions(parsedResult.subscriptions)
+    } else if (parsedResult.feeds && Array.isArray(parsedResult.feeds)) {
+      incoming = normalizeSubscriptions(parsedResult.feeds)
+    } else {
+      incoming = normalizeSubscriptions(parsedResult)
+    }
     invalidCount = typeof parsedResult.invalidCount === "number" ? parsedResult.invalidCount : 0
+    if (Array.isArray(parsedResult.categories)) parsedCategories = parsedResult.categories
   } else {
-    incoming = httpsFeedUrls(parsedResult)
+    incoming = normalizeSubscriptions(parsedResult)
   }
-  var incomingUnique = []
-  for (var i = 0; i < incoming.length; i++) {
-    if (incomingUnique.indexOf(incoming[i]) === -1) incomingUnique.push(incoming[i])
-  }
+
+  var currentUrls = {}
+  for (var i = 0; i < current.length; i++) currentUrls[current[i].url] = true
+
   var added = []
   var duplicates = 0
-  for (var j = 0; j < incomingUnique.length; j++) {
-    if (current.indexOf(incomingUnique[j]) === -1) {
-      added.push(incomingUnique[j])
+  for (var j = 0; j < incoming.length; j++) {
+    if (!currentUrls[incoming[j].url]) {
+      added.push(incoming[j])
+      currentUrls[incoming[j].url] = true
     } else {
       duplicates++
     }
   }
+
   var nameLabel = filename ? (" from " + filename) : ""
   var parts = []
   if (added.length > 0) {
@@ -268,16 +476,147 @@ function calculateImportResult(currentFeeds, parsedResult, filename) {
     parts.push(invalidCount + " need attention")
   }
   var message = parts.join(" · ")
-  var nextFeeds = current.slice()
-  for (var k = 0; k < added.length; k++) nextFeeds.push(added[k])
+  var nextSubs = mergeSubscriptions(current, added)
+  var nextFeeds = []
+  for (var k = 0; k < nextSubs.length; k++) nextFeeds.push(nextSubs[k].url)
+
   return {
     status: (added.length > 0 || duplicates > 0) ? "success" : "error",
     imported: added.length,
     duplicates: duplicates,
     invalid: invalidCount,
     message: message,
-    newFeeds: nextFeeds
+    newSubscriptions: nextSubs,
+    newFeeds: nextFeeds,
+    categories: parsedCategories
   }
+}
+
+function extractCategories(subscriptions, articles, readSet) {
+  var subs = normalizeSubscriptions(subscriptions)
+  var arts = articles || []
+  var reads = readSet || []
+
+  var feedCatMap = {}
+  for (var s = 0; s < subs.length; s++) {
+    feedCatMap[subs[s].url] = subs[s].category || ""
+  }
+
+  var totalCount = arts.length
+  var totalUnread = unreadCount(arts, reads)
+
+  var catData = {}
+  for (var i = 0; i < subs.length; i++) {
+    var cat = subs[i].category
+    if (cat && !catData[cat]) {
+      catData[cat] = { count: 0, unreadCount: 0 }
+    }
+  }
+
+  for (var a = 0; a < arts.length; a++) {
+    var art = arts[a] || {}
+    var artCat = art.category || feedCatMap[art.feedUrl] || ""
+    var isUnr = !isRead(reads, art)
+    if (artCat) {
+      if (!catData[artCat]) catData[artCat] = { count: 0, unreadCount: 0 }
+      catData[artCat].count++
+      if (isUnr) catData[artCat].unreadCount++
+    }
+  }
+
+  var list = [
+    { id: "all", name: "All", count: totalCount, unreadCount: totalUnread }
+  ]
+
+  var catNames = Object.keys(catData).sort()
+  for (var k = 0; k < catNames.length; k++) {
+    var name = catNames[k]
+    list.push({
+      id: name,
+      name: name,
+      count: catData[name].count,
+      unreadCount: catData[name].unreadCount
+    })
+  }
+
+  return list
+}
+
+function filterReaderArticles(articles, options) {
+  var list = articles || []
+  var opts = options || {}
+  var category = String(opts.category || "all").trim()
+  var unreadOnly = Boolean(opts.unreadOnly)
+  var search = String(opts.search || "").trim().toLowerCase()
+  var readSet = opts.readSet || []
+  var feedCatMap = opts.feedCategoryMap || {}
+
+  var out = []
+  for (var i = 0; i < list.length; i++) {
+    var item = list[i] || {}
+    var itemCat = item.category || feedCatMap[item.feedUrl] || ""
+
+    if (category && category.toLowerCase() !== "all") {
+      if (itemCat.toLowerCase() !== category.toLowerCase()) {
+        continue
+      }
+    }
+
+    if (unreadOnly) {
+      if (isRead(readSet, item)) {
+        continue
+      }
+    }
+
+    if (search) {
+      var hay = [item.title, item.excerpt, item.feedName, itemCat, item.link].join(" ").toLowerCase()
+      if (hay.indexOf(search) === -1) {
+        continue
+      }
+    }
+
+    out.push(item)
+  }
+
+  return out
+}
+
+function generateOpml(subscriptions) {
+  var subs = normalizeSubscriptions(subscriptions)
+  var xml = ['<?xml version="1.0" encoding="UTF-8"?>', '<opml version="2.0">', '  <head>', '    <title>Omarchy RSS Subscriptions</title>', '  </head>', '  <body>']
+
+  var byCategory = {}
+  var flat = []
+  for (var i = 0; i < subs.length; i++) {
+    var s = subs[i]
+    var cat = s.category || (s.categoryPath && s.categoryPath.length ? s.categoryPath[0] : "")
+    if (cat) {
+      if (!byCategory[cat]) byCategory[cat] = []
+      byCategory[cat].push(s)
+    } else {
+      flat.push(s)
+    }
+  }
+
+  var catNames = Object.keys(byCategory).sort()
+  for (var c = 0; c < catNames.length; c++) {
+    var catName = catNames[c]
+    xml.push('    <outline text="' + escapeXml(catName) + '" title="' + escapeXml(catName) + '">')
+    var items = byCategory[catName]
+    for (var j = 0; j < items.length; j++) {
+      var item = items[j]
+      xml.push('      <outline type="rss" text="' + escapeXml(item.title) + '" title="' + escapeXml(item.title) + '" xmlUrl="' + escapeXml(item.url) + '"/>')
+    }
+    xml.push('    </outline>')
+  }
+
+  for (var k = 0; k < flat.length; k++) {
+    var f = flat[k]
+    xml.push('    <outline type="rss" text="' + escapeXml(f.title) + '" title="' + escapeXml(f.title) + '" xmlUrl="' + escapeXml(f.url) + '"/>')
+  }
+
+  xml.push('  </body>', '</opml>')
+  return xml.join('\n')
 }
 
 function parseSharePayload(text) {
@@ -704,10 +1043,19 @@ if (typeof module !== "undefined" && module.exports) {
     filePathFromUrl: filePathFromUrl,
     filenameFromPath: filenameFromPath,
     parseOpmlDetails: parseOpmlDetails,
+    parseOpmlStructured: parseOpmlStructured,
     parseOpml: parseOpml,
     calculateImportResult: calculateImportResult,
     parseSharePayload: parseSharePayload,
     mergeFeedLists: mergeFeedLists,
+    normalizeSubscriptions: normalizeSubscriptions,
+    serializeSubscriptions: serializeSubscriptions,
+    mergeSubscriptions: mergeSubscriptions,
+    extractCategories: extractCategories,
+    filterReaderArticles: filterReaderArticles,
+    generateOpml: generateOpml,
+    extractDomainTitle: extractDomainTitle,
+    escapeXml: escapeXml,
     removeFeedUrl: removeFeedUrl,
     activateUrl: activateUrl,
     itemIdentity: itemIdentity,

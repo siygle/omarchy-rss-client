@@ -9,9 +9,21 @@ BarWidget {
   id: root
   moduleName: "io.github.rafaelvzago.rss"
 
+  readonly property var configuredSubscriptions: Model.normalizeSubscriptions(setting("subscriptions", ""), setting("feedUrls", ""))
   readonly property var configuredFeedUrls: {
-    var urls = Model.httpsFeedUrls(setting("feedUrls", ""))
-    return urls ? urls : []
+    var urls = []
+    for (var i = 0; i < configuredSubscriptions.length; i++) {
+      if (configuredSubscriptions[i].enabled !== false) urls.push(configuredSubscriptions[i].url)
+    }
+    return urls
+  }
+  readonly property var configuredCategories: Model.extractCategories(configuredSubscriptions, root.items, root.readSet)
+  readonly property var feedCategoryMap: {
+    var map = {}
+    for (var i = 0; i < configuredSubscriptions.length; i++) {
+      map[configuredSubscriptions[i].url] = configuredSubscriptions[i].category || ""
+    }
+    return map
   }
   readonly property int configuredMaxItemsPerFeed: {
     var raw = setting("maxItemsPerFeed", null)
@@ -21,6 +33,7 @@ BarWidget {
   }
   readonly property int configuredPollIntervalMinutes: Model.pollIntervalMinutes(setting("pollIntervalMinutes", 15))
   readonly property int configuredItemsPerPage: Model.pageSize(setting("itemsPerPage", 10))
+  readonly property bool configuredUnreadOnlyDefault: setting("unreadOnlyDefault", false) === true
   readonly property string configuredBarSection: {
     var fromLayout = Model.sectionFromLayout(root.bar && root.bar.layoutConfig, root.moduleName)
     if (fromLayout) return fromLayout
@@ -57,10 +70,14 @@ BarWidget {
     if ("hostWidget" in target) target.hostWidget = root
     if ("emptyCopy" in target) target.emptyCopy = Model.emptyPanelCopy(root.configuredFeedUrls)
     if ("items" in target) target.items = root.items
-    if ("feedUrls" in target) target.feedUrls = Model.httpsFeedUrls(Model.serializeFeedUrls(root.configuredFeedUrls))
+    if ("subscriptions" in target) target.subscriptions = root.configuredSubscriptions
+    if ("feedUrls" in target) target.feedUrls = root.configuredFeedUrls
+    if ("categories" in target) target.categories = root.configuredCategories
+    if ("feedCategoryMap" in target) target.feedCategoryMap = root.feedCategoryMap
     if ("pollIntervalMinutes" in target) target.pollIntervalMinutes = root.configuredPollIntervalMinutes
     if ("maxItemsPerFeed" in target) target.maxItemsPerFeed = root.configuredMaxItemsPerFeed
     if ("itemsPerPage" in target) target.itemsPerPage = root.configuredItemsPerPage
+    if ("unreadOnlyDefault" in target) target.unreadOnlyDefault = root.configuredUnreadOnlyDefault
     if ("barSection" in target) target.barSection = root.configuredBarSection
     if ("readSet" in target) target.readSet = root.readSet
     if ("lastImportResult" in target) target.lastImportResult = root.lastImportResult
@@ -162,45 +179,69 @@ BarWidget {
     var parseDetails = Model.parseOpmlDetails(raw)
     if (!parseDetails.feeds.length) {
       var parsed = Model.parseSharePayload(raw)
-      parseDetails = { feeds: parsed, invalidCount: 0, totalFound: parsed.length }
+      parseDetails = { feeds: parsed, subscriptions: Model.normalizeSubscriptions([], parsed), categories: [], invalidCount: 0, totalFound: parsed.length }
     }
-    var result = Model.calculateImportResult(root.configuredFeedUrls, parseDetails, "")
+    var result = Model.calculateImportResult(root.configuredSubscriptions, parseDetails, "")
     root.lastImportResult = result
     root.lastImportMessage = result.message
     if (result.status === "success" && result.imported > 0) {
-      persistSettings({ feedUrls: Model.serializeFeedUrls(result.newFeeds) })
+      persistSettings({
+        subscriptions: Model.serializeSubscriptions(result.newSubscriptions),
+        feedUrls: Model.serializeFeedUrls(result.newFeeds)
+      })
       fetchFeed()
     }
     if (panelLoader.item) {
-      panelLoader.item.feedUrls = Model.httpsFeedUrls(Model.serializeFeedUrls(root.configuredFeedUrls))
+      panelLoader.item.subscriptions = root.configuredSubscriptions
+      panelLoader.item.feedUrls = root.configuredFeedUrls
       panelLoader.item.shareStatus = result.message
       panelLoader.item.lastImportResult = result
     }
     injectPanel()
   }
 
-  function shareFeeds(urls) {
-    var list = urls && urls.length ? urls : root.configuredFeedUrls
-    var payload = Model.sharePayload(list)
+  function shareFeeds() {
+    var payload = Model.generateOpml(root.configuredSubscriptions)
     var quoted = "'" + String(payload).replace(/'/g, "'\\''") + "'"
     Quickshell.execDetached(["bash", "-lc", "printf %s " + quoted + " | wl-copy"])
-    return Model.httpsFeedUrls(list).length
+    return root.configuredSubscriptions.length
+  }
+
+  function updateSubscriptions(subs) {
+    var normalized = Model.normalizeSubscriptions(subs)
+    var feedList = []
+    for (var i = 0; i < normalized.length; i++) {
+      if (normalized[i].enabled !== false) feedList.push(normalized[i].url)
+    }
+    persistSettings({
+      subscriptions: Model.serializeSubscriptions(normalized),
+      feedUrls: Model.serializeFeedUrls(feedList)
+    })
+    fetchFeed()
+    injectPanel()
+    return normalized.length
   }
 
   function importFeeds(urls) {
-    var next = Model.httpsFeedUrls(Model.serializeFeedUrls(urls))
-    persistSettings({ feedUrls: Model.serializeFeedUrls(next) })
-    fetchFeed()
-    return next.length
+    var incomingSubs = Model.normalizeSubscriptions([], urls)
+    var merged = Model.mergeSubscriptions(root.configuredSubscriptions, incomingSubs)
+    return updateSubscriptions(merged)
   }
 
-  function saveConfig(urls, minutes, perFeed, perPage, section) {
+  function saveConfig(subs, minutes, perFeed, perPage, section, defaultUnreadOnly) {
+    var normalized = Model.normalizeSubscriptions(subs !== undefined ? subs : root.configuredSubscriptions)
+    var feedList = []
+    for (var i = 0; i < normalized.length; i++) {
+      if (normalized[i].enabled !== false) feedList.push(normalized[i].url)
+    }
     persistSettings({
-      feedUrls: Model.serializeFeedUrls(Model.httpsFeedUrls(urls)),
+      subscriptions: Model.serializeSubscriptions(normalized),
+      feedUrls: Model.serializeFeedUrls(feedList),
       pollIntervalMinutes: Model.pollIntervalMinutes(minutes),
       maxItemsPerFeed: Model.maxItemsPerFeed(perFeed),
       itemsPerPage: Model.pageSize(perPage),
-      barSection: Model.barSection(section)
+      barSection: Model.barSection(section),
+      unreadOnlyDefault: defaultUnreadOnly === true
     })
     applyBarSection(section)
     fetchFeed()
@@ -465,19 +506,23 @@ BarWidget {
       var parseDetails = Model.parseOpmlDetails(content)
       if (!parseDetails.feeds.length) {
         var parsed = Model.parseSharePayload(content)
-        parseDetails = { feeds: parsed, invalidCount: 0, totalFound: parsed.length }
+        parseDetails = { feeds: parsed, subscriptions: Model.normalizeSubscriptions([], parsed), categories: [], invalidCount: 0, totalFound: parsed.length }
       }
-      var result = Model.calculateImportResult(root.configuredFeedUrls, parseDetails, filename)
+      var result = Model.calculateImportResult(root.configuredSubscriptions, parseDetails, filename)
       console.log("[RSS-D696463-LIVE] parsed count: " + parseDetails.feeds.length + ", result: " + JSON.stringify(result))
       root.lastImportResult = result
       root.lastImportMessage = result.message
-      if (result.status === "success" && result.imported > 0) {
-        persistSettings({ feedUrls: Model.serializeFeedUrls(result.newFeeds) })
+      if (result.status === "success" && (result.imported > 0 || result.duplicates > 0)) {
+        persistSettings({
+          subscriptions: Model.serializeSubscriptions(result.newSubscriptions),
+          feedUrls: Model.serializeFeedUrls(result.newFeeds)
+        })
         fetchFeed()
         console.log("[RSS-D696463-LIVE] persisted feed count: " + result.newFeeds.length)
       }
       if (panelLoader.item) {
-        panelLoader.item.feedUrls = Model.httpsFeedUrls(Model.serializeFeedUrls(root.configuredFeedUrls))
+        panelLoader.item.subscriptions = root.configuredSubscriptions
+        panelLoader.item.feedUrls = root.configuredFeedUrls
         panelLoader.item.shareStatus = result.message
         panelLoader.item.lastImportResult = result
       }

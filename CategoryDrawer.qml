@@ -1,0 +1,129 @@
+import QtQuick
+import qs.Commons
+import qs.Ui
+
+Item {
+  id: root
+
+  property var categories: []
+  property string selectedCategory: "all"
+  property bool isOpen: false
+  property color contentForeground: Color.foreground
+  property string contentFontFamily: Style.font.family
+
+  signal categorySelected(string categoryId)
+  signal closeRequested()
+
+  readonly property int targetWidth: Style.space(136)
+
+  width: root.isOpen ? targetWidth : 0
+  clip: true
+
+  Behavior on width {
+    NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
+  }
+
+  Rectangle {
+    anchors.fill: parent
+    color: Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.03)
+    border.color: Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.08)
+    border.width: 1
+    radius: Style.space(4)
+
+    Column {
+      anchors.fill: parent
+      anchors.margins: Style.space(6)
+      spacing: Style.space(4)
+
+      // Drawer Header
+      Row {
+        width: parent.width
+        height: Style.space(24)
+        spacing: Style.space(4)
+
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          text: "CATEGORIES"
+          font.family: root.contentFontFamily
+          font.pixelSize: Style.font.caption
+          font.bold: true
+          color: Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.4)
+        }
+      }
+
+      // Category List
+      ListView {
+        id: catList
+        width: parent.width
+        height: parent.height - Style.space(28)
+        model: root.categories || []
+        spacing: Style.space(2)
+        clip: true
+
+        delegate: Rectangle {
+          id: catRow
+          width: catList.width
+          height: Style.space(30)
+          radius: Style.space(4)
+
+          readonly property bool isCurrent: (modelData.id || "all").toLowerCase() === root.selectedCategory.toLowerCase()
+          readonly property bool hovered: rowMouse.containsMouse
+
+          color: isCurrent
+            ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.16)
+            : (hovered ? Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.06) : "transparent")
+
+          Behavior on color { ColorAnimation { duration: 80 } }
+
+          Row {
+            anchors.fill: parent
+            anchors.leftMargin: Style.space(6)
+            anchors.rightMargin: Style.space(6)
+            spacing: Style.space(4)
+
+            Text {
+              width: parent.width - (countBadge.visible ? countBadge.width + Style.space(4) : 0)
+              anchors.verticalCenter: parent.verticalCenter
+              text: modelData.name || "All"
+              elide: Text.ElideRight
+              font.family: root.contentFontFamily
+              font.pixelSize: Style.font.body
+              font.bold: isCurrent
+              color: isCurrent ? Color.accent : root.contentForeground
+            }
+
+            Rectangle {
+              id: countBadge
+              visible: (modelData.unreadCount || 0) > 0
+              anchors.verticalCenter: parent.verticalCenter
+              height: Style.space(16)
+              width: Math.max(height, badgeText.implicitWidth + Style.space(6))
+              radius: height / 2
+              color: isCurrent ? Color.accent : Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.12)
+
+              Text {
+                id: badgeText
+                anchors.centerIn: parent
+                text: String(modelData.unreadCount || 0)
+                font.family: root.contentFontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                color: isCurrent ? Color.background : root.contentForeground
+              }
+            }
+          }
+
+          MouseArea {
+            id: rowMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+              root.categorySelected(modelData.id || "all")
+            }
+          }
+        }
+      }
+    }
+  }
+}
