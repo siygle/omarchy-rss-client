@@ -253,6 +253,14 @@ BarWidget {
     for (var i = 0; i < normalized.length; i++) {
       if (normalized[i].enabled !== false) feedList.push(normalized[i].url)
     }
+
+    // Prune cached articles belonging exclusively to removed subscriptions
+    var prunedItems = Model.pruneArticlesBySubscriptions(root.items, normalized)
+    if (prunedItems.length !== root.items.length) {
+      root.items = prunedItems
+      persistState()
+    }
+
     persistSettings({
       subscriptions: Model.serializeSubscriptions(normalized),
       feedUrls: Model.serializeFeedUrls(feedList)

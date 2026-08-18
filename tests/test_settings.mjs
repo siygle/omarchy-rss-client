@@ -433,3 +433,32 @@ test("removeSubscription removes target subscription cleanly", () => {
   assert.equal(resNotFound.subscriptions.length, 1);
 });
 
+test("pruneArticlesBySubscriptions removes articles for deleted feeds and updates categories", () => {
+  const subs = [
+    { url: "https://archlinux.org/feeds/news/", title: "Arch", category: "Linux", categoryPath: ["Linux"], enabled: true },
+    { url: "https://reddit.com/r/linux/.rss", title: "Reddit", category: "Reddit", categoryPath: ["Reddit"], enabled: true }
+  ];
+
+  const articles = [
+    { identity: "a1", feedUrl: "https://archlinux.org/feeds/news/", title: "Arch Post 1" },
+    { identity: "a2", feedUrl: "https://archlinux.org/feeds/news/", title: "Arch Post 2" },
+    { identity: "r1", feedUrl: "https://reddit.com/r/linux/.rss", title: "Reddit Post 1" }
+  ];
+
+  // Deleting reddit subscription
+  const rem = Model.removeSubscription(subs, "https://reddit.com/r/linux/.rss");
+  assert.equal(rem.ok, true);
+  assert.equal(rem.subscriptions.length, 1);
+
+  // Prune articles
+  const remainingArticles = Model.pruneArticlesBySubscriptions(articles, rem.subscriptions);
+  assert.equal(remainingArticles.length, 2);
+  assert.deepEqual(remainingArticles.map(a => a.identity), ["a1", "a2"]);
+
+  // Categories extraction reflects deletion of "Reddit" category
+  const categories = Model.extractCategories(rem.subscriptions, remainingArticles, []);
+  assert.deepEqual(categories.map(c => c.id), ["all", "Linux"]);
+  assert.equal(categories.find(c => c.id === "Reddit"), undefined);
+});
+
+

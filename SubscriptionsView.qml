@@ -403,14 +403,22 @@ Item {
       clip: true
 
       delegate: Rectangle {
+        id: subRow
         width: subListView.width
         height: Style.space(46)
         radius: Style.space(4)
-        color: feedMouse.containsMouse
+        color: rowHover.containsMouse
           ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.05)
           : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.02)
         border.color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.06)
         border.width: 1
+
+        MouseArea {
+          id: rowHover
+          anchors.fill: parent
+          hoverEnabled: true
+          acceptedButtons: Qt.NoButton
+        }
 
         Row {
           anchors.fill: parent
@@ -493,8 +501,8 @@ Item {
 
           // Delete button
           Rectangle {
-            width: Style.space(24)
-            height: Style.space(24)
+            width: Style.space(26)
+            height: Style.space(26)
             radius: Style.space(4)
             anchors.verticalCenter: parent.verticalCenter
             color: delHover.containsMouse ? Qt.rgba(Color.negative.r, Color.negative.g, Color.negative.b, 0.15) : "transparent"
@@ -515,12 +523,6 @@ Item {
               onClicked: root.removeSub(modelData)
             }
           }
-        }
-
-        MouseArea {
-          id: feedMouse
-          anchors.fill: parent
-          hoverEnabled: true
         }
       }
     }

@@ -552,6 +552,25 @@ function removeSubscription(subscriptions, targetUrl) {
   return { ok: removed !== null, removed: removed, subscriptions: next }
 }
 
+function pruneArticlesBySubscriptions(articles, subscriptions) {
+  var subs = normalizeSubscriptions(subscriptions)
+  var allowedMap = {}
+  for (var i = 0; i < subs.length; i++) {
+    allowedMap[subs[i].url] = true
+  }
+  var list = articles || []
+  var out = []
+  for (var a = 0; a < list.length; a++) {
+    var item = list[a]
+    if (!item) continue
+    var fUrl = item.feedUrl || item.subscriptionUrl || ""
+    if (!fUrl || allowedMap[fUrl]) {
+      out.push(item)
+    }
+  }
+  return out
+}
+
 function calculateImportResult(currentSubs, parsedResult, filename) {
   var current = normalizeSubscriptions(currentSubs)
   var incoming = []
@@ -1258,6 +1277,7 @@ if (typeof module !== "undefined" && module.exports) {
     normalizeFeedInputUrl: normalizeFeedInputUrl,
     addSubscription: addSubscription,
     removeSubscription: removeSubscription,
+    pruneArticlesBySubscriptions: pruneArticlesBySubscriptions,
     DEFAULT_RETENTION_DAYS: DEFAULT_RETENTION_DAYS,
     MIN_RETENTION_DAYS: MIN_RETENTION_DAYS,
     MAX_RETENTION_DAYS: MAX_RETENTION_DAYS,
