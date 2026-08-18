@@ -94,6 +94,7 @@ Item {
     unreadOnly: root.unreadOnly,
     search: root.searchQuery,
     readSet: root.readSet,
+    subscriptions: root.subscriptions,
     feedCategoryMap: root.feedCategoryMap
   })
 
@@ -221,135 +222,133 @@ Item {
       }
     }
 
-    // 2. Toolbar (Category toggle, Scope chip, Unread toggle, Search, Mark read)
-    Row {
+    // 2. Responsive Toolbar (Category toggle, Scope chip, Unread toggle, Search, Mark read)
+    Item {
       width: parent.width
       height: Style.space(30)
-      spacing: Style.space(6)
 
-      // Category Drawer Toggle (only if categories exist)
-      Rectangle {
-        visible: root.hasCategories
-        width: Style.space(28)
-        height: Style.space(28)
-        radius: Style.space(4)
-        color: root.drawerOpen
-          ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.2)
-          : (drawerHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent")
-        border.color: root.drawerOpen ? Color.accent : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.1)
-        border.width: 1
+      Row {
+        id: toolbarLeft
+        anchors.left: parent.left
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: Style.space(6)
 
-        Text {
-          anchors.centerIn: parent
-          text: "󰍜"
-          font.family: root.contentFontFamily
-          font.pixelSize: Style.font.body
-          color: root.drawerOpen ? Color.accent : root.contentForeground
-        }
-
-        MouseArea {
-          id: drawerHover
-          anchors.fill: parent
-          hoverEnabled: true
-          cursorShape: Qt.PointingHandCursor
-          onClicked: root.toggleCategoryDrawer()
-        }
-      }
-
-      // Scope Pill Badge
-      Rectangle {
-        height: Style.space(26)
-        width: scopeText.implicitWidth + Style.space(14)
-        radius: Style.space(13)
-        color: root.currentCategory.toLowerCase() !== "all"
-          ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.14)
-          : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.05)
-        border.color: root.currentCategory.toLowerCase() !== "all" ? Color.accent : "transparent"
-        border.width: 1
-
-        Row {
-          anchors.centerIn: parent
-          spacing: Style.space(4)
+        // Category Drawer Toggle (only if categories exist)
+        Rectangle {
+          visible: root.hasCategories
+          width: Style.space(28)
+          height: Style.space(28)
+          radius: Style.space(4)
+          color: root.drawerOpen
+            ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.2)
+            : (drawerHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent")
+          border.color: root.drawerOpen ? Color.accent : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.1)
+          border.width: 1
 
           Text {
-            id: scopeText
-            text: root.currentCategory.toLowerCase() === "all" ? "All feeds" : root.currentCategory
+            anchors.centerIn: parent
+            text: "󰍜"
             font.family: root.contentFontFamily
-            font.pixelSize: Style.font.caption
-            font.bold: true
-            color: root.currentCategory.toLowerCase() !== "all" ? Color.accent : root.contentForeground
+            font.pixelSize: Style.font.body
+            color: root.drawerOpen ? Color.accent : root.contentForeground
+          }
+
+          MouseArea {
+            id: drawerHover
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.toggleCategoryDrawer()
           }
         }
 
-        MouseArea {
-          anchors.fill: parent
-          hoverEnabled: true
-          cursorShape: Qt.PointingHandCursor
-          onClicked: {
-            if (root.currentCategory.toLowerCase() !== "all") {
-              root.currentCategory = "all"
-            } else if (root.hasCategories) {
-              root.toggleCategoryDrawer()
+        // Scope Pill Badge
+        Rectangle {
+          height: Style.space(26)
+          width: scopeText.implicitWidth + Style.space(14)
+          radius: Style.space(13)
+          color: root.currentCategory.toLowerCase() !== "all"
+            ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.14)
+            : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.05)
+          border.color: root.currentCategory.toLowerCase() !== "all" ? Color.accent : "transparent"
+          border.width: 1
+
+          Row {
+            anchors.centerIn: parent
+            spacing: Style.space(4)
+
+            Text {
+              id: scopeText
+              text: root.currentCategory.toLowerCase() === "all" ? "All feeds" : root.currentCategory
+              font.family: root.contentFontFamily
+              font.pixelSize: Style.font.caption
+              font.bold: true
+              color: root.currentCategory.toLowerCase() !== "all" ? Color.accent : root.contentForeground
+            }
+          }
+
+          MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+              if (root.currentCategory.toLowerCase() !== "all") {
+                root.currentCategory = "all"
+              } else if (root.hasCategories) {
+                root.toggleCategoryDrawer()
+              }
             }
           }
         }
-      }
 
-      // Unread-Only Toggle Chip
-      Rectangle {
-        height: Style.space(26)
-        width: unreadText.implicitWidth + Style.space(16)
-        radius: Style.space(13)
-        color: root.unreadOnly
-          ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.18)
-          : (unreadHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent")
-        border.color: root.unreadOnly ? Color.accent : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.12)
-        border.width: 1
+        // Unread-Only Toggle Chip
+        Rectangle {
+          height: Style.space(26)
+          width: unreadText.implicitWidth + Style.space(16)
+          radius: Style.space(13)
+          color: root.unreadOnly
+            ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.18)
+            : (unreadHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent")
+          border.color: root.unreadOnly ? Color.accent : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.12)
+          border.width: 1
 
-        Row {
-          anchors.centerIn: parent
-          spacing: Style.space(4)
+          Row {
+            anchors.centerIn: parent
+            spacing: Style.space(4)
 
-          Rectangle {
-            anchors.verticalCenter: parent.verticalCenter
-            width: Style.space(6)
-            height: width
-            radius: width / 2
-            color: Color.accent
+            Rectangle {
+              anchors.verticalCenter: parent.verticalCenter
+              width: Style.space(6)
+              height: width
+              radius: width / 2
+              color: Color.accent
+            }
+
+            Text {
+              id: unreadText
+              text: "Unread"
+              font.family: root.contentFontFamily
+              font.pixelSize: Style.font.caption
+              font.bold: root.unreadOnly
+              color: root.unreadOnly ? Color.accent : root.contentForeground
+            }
           }
 
-          Text {
-            id: unreadText
-            text: "Unread"
-            font.family: root.contentFontFamily
-            font.pixelSize: Style.font.caption
-            font.bold: root.unreadOnly
-            color: root.unreadOnly ? Color.accent : root.contentForeground
+          MouseArea {
+            id: unreadHover
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.unreadOnly = !root.unreadOnly
           }
         }
-
-        MouseArea {
-          id: unreadHover
-          anchors.fill: parent
-          hoverEnabled: true
-          cursorShape: Qt.PointingHandCursor
-          onClicked: root.unreadOnly = !root.unreadOnly
-        }
       }
 
-      // Search Field (expands to fill remaining width)
-      SearchField {
-        id: searchField
-        width: Math.max(120, parent.width - (root.hasCategories ? Style.space(34) : 0) - scopeText.implicitWidth - unreadText.implicitWidth - markAllBtn.width - Style.space(60))
-        contentForeground: root.contentForeground
-        contentFontFamily: root.contentFontFamily
-        onTextChanged: root.searchQuery = text
-        onCleared: root.searchQuery = ""
-      }
-
-      // Mark all read button
+      // Mark all read button (anchored right)
       Rectangle {
         id: markAllBtn
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
         width: Style.space(28)
         height: Style.space(28)
         radius: Style.space(4)
@@ -375,15 +374,29 @@ Item {
           }
         }
       }
+
+      // Search Field (expands responsively between left controls and right button)
+      SearchField {
+        id: searchField
+        anchors.left: toolbarLeft.right
+        anchors.leftMargin: Style.space(6)
+        anchors.right: markAllBtn.left
+        anchors.rightMargin: Style.space(6)
+        anchors.verticalCenter: parent.verticalCenter
+        contentForeground: root.contentForeground
+        contentFontFamily: root.contentFontFamily
+        onTextChanged: root.searchQuery = text
+        onCleared: root.searchQuery = ""
+      }
     }
 
     // 3. Main Content Row: Category Drawer (Left) + Article List (Right)
     Row {
       width: parent.width
-      height: parent.height - Style.space(32) - Style.space(30) - Style.space(32) - Style.space(16)
-      spacing: root.drawerOpen ? Style.space(8) : 0
+      height: parent.height - Style.space(32) - Style.space(30) - Style.space(24) - Style.space(24)
+      spacing: (catDrawer.width > 0) ? Style.space(8) : 0
 
-      // Category Drawer
+      // Category Drawer (0 width when closed, reclaims 100% space)
       CategoryDrawer {
         id: catDrawer
         height: parent.height
@@ -398,7 +411,7 @@ Item {
         onCloseRequested: root.drawerOpen = false
       }
 
-      // Article List Container
+      // Article List Container (takes 100% of remaining width)
       Item {
         width: parent.width - (catDrawer.width > 0 ? catDrawer.width + Style.space(8) : 0)
         height: parent.height
@@ -455,14 +468,17 @@ Item {
       }
     }
 
-    // 4. Footer Pagination & Status
-    Row {
+    // 4. Footer Pagination & Status (Cleanly anchored inside boundaries)
+    Item {
       width: parent.width
-      height: Style.space(26)
-      spacing: Style.space(8)
+      height: Style.space(24)
 
       Text {
+        anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
+        anchors.right: paginationRow.visible ? paginationRow.left : parent.right
+        anchors.rightMargin: Style.space(8)
+        elide: Text.ElideRight
         text: {
           if (root.totalFilteredCount === 0) return "0 articles"
           var start = root.currentPage * root.itemsPerPage + 1
@@ -474,14 +490,11 @@ Item {
         color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.4)
       }
 
-      Item {
-        width: Math.max(0, parent.width - 240)
-        height: 1
-      }
-
       // Pagination controls (Prev / Page Indicator / Next)
       Row {
+        id: paginationRow
         visible: root.totalPages > 1
+        anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         spacing: Style.space(4)
 

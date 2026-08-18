@@ -75,26 +75,15 @@ Item {
 
           Behavior on color { ColorAnimation { duration: 80 } }
 
-          Row {
+          Item {
             anchors.fill: parent
-            anchors.leftMargin: Style.space(6)
-            anchors.rightMargin: Style.space(6)
-            spacing: Style.space(4)
-
-            Text {
-              width: parent.width - (countBadge.visible ? countBadge.width + Style.space(4) : 0)
-              anchors.verticalCenter: parent.verticalCenter
-              text: modelData.name || "All"
-              elide: Text.ElideRight
-              font.family: root.contentFontFamily
-              font.pixelSize: Style.font.body
-              font.bold: isCurrent
-              color: isCurrent ? Color.accent : root.contentForeground
-            }
+            anchors.leftMargin: Style.space(8)
+            anchors.rightMargin: Style.space(8)
 
             Rectangle {
               id: countBadge
               visible: (modelData.unreadCount || 0) > 0
+              anchors.right: parent.right
               anchors.verticalCenter: parent.verticalCenter
               height: Style.space(16)
               width: Math.max(height, badgeText.implicitWidth + Style.space(6))
@@ -110,6 +99,19 @@ Item {
                 font.bold: true
                 color: isCurrent ? Color.background : root.contentForeground
               }
+            }
+
+            Text {
+              anchors.left: parent.left
+              anchors.right: countBadge.visible ? countBadge.left : parent.right
+              anchors.rightMargin: countBadge.visible ? Style.space(6) : 0
+              anchors.verticalCenter: parent.verticalCenter
+              text: modelData.name || "All"
+              elide: Text.ElideRight
+              font.family: root.contentFontFamily
+              font.pixelSize: Style.font.body
+              font.bold: isCurrent
+              color: isCurrent ? Color.accent : root.contentForeground
             }
           }
 

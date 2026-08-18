@@ -492,50 +492,105 @@ function calculateImportResult(currentSubs, parsedResult, filename) {
   }
 }
 
+function matchCategory(article, selectedCategory) {
+  if (!selectedCategory || String(selectedCategory).trim().toLowerCase() === "all") return true
+  if (!article) return false
+  var target = String(selectedCategory).trim().toLowerCase()
+
+  var cat = String(article.category || "").trim().toLowerCase()
+  if (cat && cat === target) return true
+
+  var path = article.categoryPath
+  if (Array.isArray(path)) {
+    for (var i = 0; i < path.length; i++) {
+      if (String(path[i] || "").trim().toLowerCase() === target) return true
+    }
+  }
+
+  return false
+}
+
+function enrichArticles(articles, subscriptions) {
+  var list = articles || []
+  var subs = normalizeSubscriptions(subscriptions)
+  var subMap = {}
+  for (var s = 0; s < subs.length; s++) {
+    subMap[subs[s].url] = subs[s]
+  }
+
+  var out = []
+  for (var i = 0; i < list.length; i++) {
+    var a = list[i]
+    if (!a) continue
+    var feedUrl = String(a.feedUrl || a.subscriptionUrl || "").trim()
+    var sub = feedUrl ? subMap[feedUrl] : null
+    var cat = a.category || (sub ? sub.category : "") || ""
+    var catPath = (a.categoryPath && a.categoryPath.length)
+      ? a.categoryPath
+      : ((sub && sub.categoryPath && sub.categoryPath.length) ? sub.categoryPath : (cat ? [cat] : []))
+    var feedName = a.feedName || (sub ? sub.title : "") || extractDomainTitle(feedUrl || a.link)
+
+    out.push({
+      identity: a.identity || a.link || "",
+      link: a.link || "",
+      title: a.title || "",
+      excerpt: a.excerpt || "",
+      feedName: feedName,
+      feedTitle: feedName,
+      feedUrl: feedUrl || (sub ? sub.url : ""),
+      subscriptionUrl: feedUrl || (sub ? sub.url : ""),
+      category: cat,
+      categoryPath: catPath,
+      pubDateMs: a.pubDateMs
+    })
+  }
+
+  return out
+}
+
 function extractCategories(subscriptions, articles, readSet) {
   var subs = normalizeSubscriptions(subscriptions)
-  var arts = articles || []
+  var arts = enrichArticles(articles, subs)
   var reads = readSet || []
-
-  var feedCatMap = {}
-  for (var s = 0; s < subs.length; s++) {
-    feedCatMap[subs[s].url] = subs[s].category || ""
-  }
 
   var totalCount = arts.length
   var totalUnread = unreadCount(arts, reads)
 
-  var catData = {}
+  var catMap = {}
   for (var i = 0; i < subs.length; i++) {
-    var cat = subs[i].category
-    if (cat && !catData[cat]) {
-      catData[cat] = { count: 0, unreadCount: 0 }
+    var sub = subs[i]
+    if (sub.category && !catMap[sub.category]) {
+      catMap[sub.category] = true
+    }
+    if (Array.isArray(sub.categoryPath)) {
+      for (var p = 0; p < sub.categoryPath.length; p++) {
+        var pName = String(sub.categoryPath[p] || "").trim()
+        if (pName && !catMap[pName]) catMap[pName] = true
+      }
     }
   }
 
-  for (var a = 0; a < arts.length; a++) {
-    var art = arts[a] || {}
-    var artCat = art.category || feedCatMap[art.feedUrl] || ""
-    var isUnr = !isRead(reads, art)
-    if (artCat) {
-      if (!catData[artCat]) catData[artCat] = { count: 0, unreadCount: 0 }
-      catData[artCat].count++
-      if (isUnr) catData[artCat].unreadCount++
-    }
-  }
-
+  var catNames = Object.keys(catMap).sort()
   var list = [
     { id: "all", name: "All", count: totalCount, unreadCount: totalUnread }
   ]
 
-  var catNames = Object.keys(catData).sort()
   for (var k = 0; k < catNames.length; k++) {
     var name = catNames[k]
+    var catArticles = []
+    var catUnread = 0
+    for (var a = 0; a < arts.length; a++) {
+      var item = arts[a]
+      if (matchCategory(item, name)) {
+        catArticles.push(item)
+        if (!isRead(reads, item)) catUnread++
+      }
+    }
     list.push({
       id: name,
       name: name,
-      count: catData[name].count,
-      unreadCount: catData[name].unreadCount
+      count: catArticles.length,
+      unreadCount: catUnread
     })
   }
 
@@ -543,33 +598,31 @@ function extractCategories(subscriptions, articles, readSet) {
 }
 
 function filterReaderArticles(articles, options) {
-  var list = articles || []
   var opts = options || {}
   var category = String(opts.category || "all").trim()
   var unreadOnly = Boolean(opts.unreadOnly)
   var search = String(opts.search || "").trim().toLowerCase()
   var readSet = opts.readSet || []
-  var feedCatMap = opts.feedCategoryMap || {}
+  var list = enrichArticles(articles, opts.subscriptions)
 
   var out = []
   for (var i = 0; i < list.length; i++) {
     var item = list[i] || {}
-    var itemCat = item.category || feedCatMap[item.feedUrl] || ""
 
-    if (category && category.toLowerCase() !== "all") {
-      if (itemCat.toLowerCase() !== category.toLowerCase()) {
-        continue
-      }
+    // 1. Category Matching
+    if (!matchCategory(item, category)) {
+      continue
     }
 
-    if (unreadOnly) {
-      if (isRead(readSet, item)) {
-        continue
-      }
+    // 2. Unread Check
+    if (unreadOnly && isRead(readSet, item)) {
+      continue
     }
 
+    // 3. Search Query Check
     if (search) {
-      var hay = [item.title, item.excerpt, item.feedName, itemCat, item.link].join(" ").toLowerCase()
+      var catStr = Array.isArray(item.categoryPath) ? item.categoryPath.join(" ") : (item.category || "")
+      var hay = [item.title, item.excerpt, item.feedName, item.feedTitle, catStr, item.link, item.feedUrl].join(" ").toLowerCase()
       if (hay.indexOf(search) === -1) {
         continue
       }
@@ -1051,6 +1104,8 @@ if (typeof module !== "undefined" && module.exports) {
     normalizeSubscriptions: normalizeSubscriptions,
     serializeSubscriptions: serializeSubscriptions,
     mergeSubscriptions: mergeSubscriptions,
+    matchCategory: matchCategory,
+    enrichArticles: enrichArticles,
     extractCategories: extractCategories,
     filterReaderArticles: filterReaderArticles,
     generateOpml: generateOpml,

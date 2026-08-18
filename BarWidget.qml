@@ -25,6 +25,14 @@ BarWidget {
     }
     return map
   }
+  readonly property var subscriptionMap: {
+    var map = {}
+    var list = root.configuredSubscriptions || []
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] && list[i].url) map[list[i].url] = list[i]
+    }
+    return map
+  }
   readonly property int configuredMaxItemsPerFeed: {
     var raw = setting("maxItemsPerFeed", null)
     if (raw === undefined || raw === null || raw === "")
@@ -287,11 +295,26 @@ BarWidget {
     if (!Model.isFeedTextResponse(split.contentType, body)) return
     var parsed = Model.parseFeed(body)
     if (parsed.ok && parsed.items && parsed.items.length) {
+      var sub = root.subscriptionMap[root.currentFetchUrl] || {}
+      var subCat = sub.category || ""
+      var subCatPath = sub.categoryPath || (subCat ? [subCat] : [])
+      var feedTitle = parsed.feedName || sub.title || Model.extractDomainTitle(root.currentFetchUrl)
+
       var next = []
       var existing = root.collectedItems || []
       for (var i = 0; i < existing.length; i++) next.push(existing[i])
+
       var incoming = Model.recentList(parsed.items, root.configuredMaxItemsPerFeed)
-      for (var j = 0; j < incoming.length; j++) next.push(incoming[j])
+      for (var j = 0; j < incoming.length; j++) {
+        var it = incoming[j]
+        it.feedUrl = root.currentFetchUrl
+        it.subscriptionUrl = root.currentFetchUrl
+        it.feedName = feedTitle
+        it.feedTitle = feedTitle
+        it.category = subCat
+        it.categoryPath = subCatPath
+        next.push(it)
+      }
       root.collectedItems = next
       return
     }
@@ -303,7 +326,8 @@ BarWidget {
   }
 
   function finishFetch() {
-    root.items = Model.uniqueItems(root.collectedItems)
+    var rawItems = Model.uniqueItems(root.collectedItems)
+    root.items = Model.enrichArticles(rawItems, root.configuredSubscriptions)
     persistState()
     injectPanel()
   }
@@ -422,7 +446,9 @@ BarWidget {
     onLoaded: {
       var parsed = Model.parseState(text())
       root.localReadSet = parsed.readIdentities
-      if (parsed.items && parsed.items.length) root.items = parsed.items
+      if (parsed.items && parsed.items.length) {
+        root.items = Model.enrichArticles(parsed.items, root.configuredSubscriptions)
+      }
       root.stateReady = true
       root.injectPanel()
       root.fetchFeed()

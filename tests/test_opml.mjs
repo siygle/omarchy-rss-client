@@ -520,3 +520,120 @@ test("generateOpml exports subscriptions with categories and flat feeds", () => 
   assert.deepEqual(parsed.categories, ["Linux"]);
 });
 
+test("matchCategory supports direct category, nested hierarchy, and case-insensitivity", () => {
+  const article = {
+    identity: "art1",
+    feedUrl: "https://archlinux.org/feed",
+    category: "Linux",
+    categoryPath: ["Technology", "Linux"]
+  };
+
+  // Matches All
+  assert.equal(Model.matchCategory(article, "all"), true);
+  assert.equal(Model.matchCategory(article, "ALL"), true);
+  assert.equal(Model.matchCategory(article, ""), true);
+
+  // Matches direct category
+  assert.equal(Model.matchCategory(article, "Linux"), true);
+  assert.equal(Model.matchCategory(article, "linux"), true);
+
+  // Matches parent category in hierarchy
+  assert.equal(Model.matchCategory(article, "Technology"), true);
+  assert.equal(Model.matchCategory(article, "technology"), true);
+
+  // Excludes unrelated categories
+  assert.equal(Model.matchCategory(article, "News"), false);
+  assert.equal(Model.matchCategory(article, "Finance"), false);
+});
+
+test("enrichArticles associates subscription metadata with articles", () => {
+  const subs = [
+    {
+      url: "https://archlinux.org/feed",
+      title: "Arch News",
+      category: "Linux",
+      categoryPath: ["Technology", "Linux"],
+      enabled: true
+    },
+    {
+      url: "https://legacy.example/rss",
+      title: "Legacy Feed",
+      category: "",
+      categoryPath: [],
+      enabled: true
+    }
+  ];
+
+  const rawArticles = [
+    { identity: "1", link: "https://archlinux.org/1", title: "New Kernel", feedUrl: "https://archlinux.org/feed" },
+    { identity: "2", link: "https://legacy.example/2", title: "Uncategorized Post", feedUrl: "https://legacy.example/rss" }
+  ];
+
+  const enriched = Model.enrichArticles(rawArticles, subs);
+  assert.equal(enriched.length, 2);
+
+  // 1. Categorized article
+  assert.equal(enriched[0].category, "Linux");
+  assert.deepEqual(enriched[0].categoryPath, ["Technology", "Linux"]);
+  assert.equal(enriched[0].feedName, "Arch News");
+  assert.equal(enriched[0].subscriptionUrl, "https://archlinux.org/feed");
+
+  // 2. Uncategorized article
+  assert.equal(enriched[1].category, "");
+  assert.deepEqual(enriched[1].categoryPath, []);
+  assert.equal(enriched[1].feedName, "Legacy Feed");
+  assert.equal(enriched[1].subscriptionUrl, "https://legacy.example/rss");
+});
+
+test("filterReaderArticles filters accurately using enriched subscription metadata", () => {
+  const subs = [
+    { url: "https://archlinux.org/feed", title: "Arch", category: "Linux", categoryPath: ["Linux"] },
+    { url: "https://thehindu.com/feed", title: "News", category: "News", categoryPath: ["News"] },
+    { url: "https://uncat.example/feed", title: "Uncategorized", category: "", categoryPath: [] }
+  ];
+
+  const articles = [
+    { identity: "a1", feedUrl: "https://archlinux.org/feed", title: "Arch Kernel 6.17" },
+    { identity: "a2", feedUrl: "https://archlinux.org/feed", title: "Pacman 7 Released" },
+    { identity: "n1", feedUrl: "https://thehindu.com/feed", title: "Global Summit News" },
+    { identity: "u1", feedUrl: "https://uncat.example/feed", title: "Random Thoughts" }
+  ];
+
+  const readSet = ["a1"];
+
+  // 1. All feeds returns all articles
+  const all = Model.filterReaderArticles(articles, { category: "all", subscriptions: subs, readSet });
+  assert.equal(all.length, 4);
+
+  // 2. Linux category returns only Linux articles
+  const linux = Model.filterReaderArticles(articles, { category: "Linux", subscriptions: subs, readSet });
+  assert.equal(linux.length, 2);
+  assert.equal(linux[0].identity, "a1");
+  assert.equal(linux[1].identity, "a2");
+
+  // 3. News category returns only News articles
+  const news = Model.filterReaderArticles(articles, { category: "News", subscriptions: subs, readSet });
+  assert.equal(news.length, 1);
+  assert.equal(news[0].identity, "n1");
+
+  // 4. Linux + Unread returns only unread Linux articles
+  const linuxUnread = Model.filterReaderArticles(articles, { category: "Linux", unreadOnly: true, subscriptions: subs, readSet });
+  assert.equal(linuxUnread.length, 1);
+  assert.equal(linuxUnread[0].identity, "a2");
+
+  // 5. Linux + Search query
+  const linuxSearch = Model.filterReaderArticles(articles, { category: "Linux", search: "Pacman", subscriptions: subs, readSet });
+  assert.equal(linuxSearch.length, 1);
+  assert.equal(linuxSearch[0].identity, "a2");
+
+  // 6. Linux + Search query that matches nothing in Linux
+  const linuxSearchMismatch = Model.filterReaderArticles(articles, { category: "Linux", search: "Summit", subscriptions: subs, readSet });
+  assert.equal(linuxSearchMismatch.length, 0);
+
+  // 7. Uncategorized articles match "all" but not "Linux" or "News"
+  const uncatInLinux = Model.filterReaderArticles([articles[3]], { category: "Linux", subscriptions: subs, readSet });
+  assert.equal(uncatInLinux.length, 0);
+  const uncatInAll = Model.filterReaderArticles([articles[3]], { category: "all", subscriptions: subs, readSet });
+  assert.equal(uncatInAll.length, 1);
+});
+

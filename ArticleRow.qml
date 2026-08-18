@@ -40,120 +40,118 @@ Item {
     onClicked: root.activated()
   }
 
-  Row {
-    anchors.fill: parent
+  // Unread dot indicator
+  Item {
+    id: unreadDot
+    anchors.left: parent.left
     anchors.leftMargin: Style.space(8)
-    anchors.rightMargin: Style.space(8)
-    spacing: Style.space(8)
+    anchors.verticalCenter: parent.verticalCenter
+    width: Style.space(8)
+    height: parent.height
 
-    // Unread dot indicator
-    Item {
-      width: Style.space(8)
-      height: parent.height
-
-      Rectangle {
-        anchors.centerIn: parent
-        width: root.isRead ? Style.space(4) : Style.space(6)
-        height: width
-        radius: width / 2
-        color: root.isRead ? "transparent" : Color.accent
-        border.color: root.isRead ? Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.15) : "transparent"
-        border.width: 1
-      }
+    Rectangle {
+      anchors.centerIn: parent
+      width: root.isRead ? Style.space(4) : Style.space(6)
+      height: width
+      radius: width / 2
+      color: root.isRead ? "transparent" : Color.accent
+      border.color: root.isRead ? Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.15) : "transparent"
+      border.width: 1
     }
+  }
 
-    // Title and metadata column
-    Column {
-      width: parent.width - Style.space(8) - (actionRow.visible ? actionRow.width + Style.space(12) : Style.space(8))
-      anchors.verticalCenter: parent.verticalCenter
-      spacing: Style.space(2)
+  // Action buttons visible on hover or selection (anchored right)
+  Row {
+    id: actionRow
+    visible: root.hovered || root.isSelected
+    anchors.right: parent.right
+    anchors.rightMargin: Style.space(8)
+    anchors.verticalCenter: parent.verticalCenter
+    spacing: Style.space(4)
+
+    // Mark read/unread toggle
+    Rectangle {
+      width: Style.space(24)
+      height: Style.space(24)
+      radius: Style.space(4)
+      color: markHover.containsMouse ? Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.1) : "transparent"
 
       Text {
-        width: parent.width
-        text: root.item.title || "Untitled"
-        elide: Text.ElideRight
+        anchors.centerIn: parent
+        text: root.isRead ? "󰄱" : "󰄬"
         font.family: root.contentFontFamily
         font.pixelSize: Style.font.body
-        font.bold: !root.isRead
-        color: root.isRead ? root.mutedColor : root.contentForeground
+        color: root.isRead ? root.mutedColor : Color.accent
       }
 
-      Row {
-        width: parent.width
-        spacing: Style.space(6)
-        clip: true
-
-        Text {
-          text: {
-            var parts = []
-            if (root.categoryName) parts.push(root.categoryName)
-            if (root.item.feedName) parts.push(root.item.feedName)
-            var rel = Model.relativeTime(root.item.pubDateMs)
-            if (rel) parts.push(rel)
-            return parts.join(" · ")
-          }
-          elide: Text.ElideRight
-          font.family: root.contentFontFamily
-          font.pixelSize: Style.font.caption
-          color: root.mutedColor
-        }
+      MouseArea {
+        id: markHover
+        anchors.fill: parent
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+        onClicked: root.toggleRead()
       }
     }
 
-    // Action buttons visible on hover or selection
-    Row {
-      id: actionRow
-      visible: root.hovered || root.isSelected
-      anchors.verticalCenter: parent.verticalCenter
-      spacing: Style.space(4)
+    // Open in browser button
+    Rectangle {
+      width: Style.space(24)
+      height: Style.space(24)
+      radius: Style.space(4)
+      color: linkHover.containsMouse ? Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.1) : "transparent"
 
-      // Mark read/unread toggle
-      Rectangle {
-        width: Style.space(24)
-        height: Style.space(24)
-        radius: Style.space(4)
-        color: markHover.containsMouse ? Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.1) : "transparent"
-
-        Text {
-          anchors.centerIn: parent
-          text: root.isRead ? "󰄱" : "󰄬"
-          font.family: root.contentFontFamily
-          font.pixelSize: Style.font.body
-          color: root.isRead ? root.mutedColor : Color.accent
-        }
-
-        MouseArea {
-          id: markHover
-          anchors.fill: parent
-          hoverEnabled: true
-          cursorShape: Qt.PointingHandCursor
-          onClicked: root.toggleRead()
-        }
+      Text {
+        anchors.centerIn: parent
+        text: "󰌹"
+        font.family: root.contentFontFamily
+        font.pixelSize: Style.font.body
+        color: root.mutedColor
       }
 
-      // Open in browser button
-      Rectangle {
-        width: Style.space(24)
-        height: Style.space(24)
-        radius: Style.space(4)
-        color: linkHover.containsMouse ? Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.1) : "transparent"
-
-        Text {
-          anchors.centerIn: parent
-          text: "󰌹"
-          font.family: root.contentFontFamily
-          font.pixelSize: Style.font.body
-          color: root.mutedColor
-        }
-
-        MouseArea {
-          id: linkHover
-          anchors.fill: parent
-          hoverEnabled: true
-          cursorShape: Qt.PointingHandCursor
-          onClicked: root.activated()
-        }
+      MouseArea {
+        id: linkHover
+        anchors.fill: parent
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+        onClicked: root.activated()
       }
+    }
+  }
+
+  // Title and metadata column (stretches to fill available space)
+  Column {
+    id: textCol
+    anchors.left: unreadDot.right
+    anchors.leftMargin: Style.space(8)
+    anchors.right: actionRow.visible ? actionRow.left : parent.right
+    anchors.rightMargin: Style.space(8)
+    anchors.verticalCenter: parent.verticalCenter
+    spacing: Style.space(2)
+
+    Text {
+      width: parent.width
+      text: root.item.title || "Untitled"
+      elide: Text.ElideRight
+      font.family: root.contentFontFamily
+      font.pixelSize: Style.font.body
+      font.bold: !root.isRead
+      color: root.isRead ? root.mutedColor : root.contentForeground
+    }
+
+    Text {
+      width: parent.width
+      text: {
+        var parts = []
+        if (root.categoryName) parts.push(root.categoryName)
+        if (root.item.feedName) parts.push(root.item.feedName)
+        var rel = Model.relativeTime(root.item.pubDateMs)
+        if (rel) parts.push(rel)
+        return parts.join(" · ")
+      }
+      elide: Text.ElideRight
+      font.family: root.contentFontFamily
+      font.pixelSize: Style.font.caption
+      color: root.mutedColor
     }
   }
 }
