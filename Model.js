@@ -755,6 +755,213 @@ function enrichArticles(articles, subscriptions) {
   return out
 }
 
+var MAX_CONCURRENT_FETCHES = 4
+
+function mergeFeedArticles(existingArticles, incomingArticles, feedUrl, maxPerFeed, retentionDays, subscriptions) {
+  var existing = existingArticles || []
+  var incoming = incomingArticles || []
+  var targetUrl = String(feedUrl || "").trim()
+
+  // Cap incoming items for this feed
+  var perFeedCap = maxItemsPerFeed(maxPerFeed)
+  var cappedIncoming = recentList(incoming, perFeedCap)
+  if (targetUrl) {
+    for (var k = 0; k < cappedIncoming.length; k++) {
+      if (!cappedIncoming[k].feedUrl) cappedIncoming[k].feedUrl = targetUrl
+      if (!cappedIncoming[k].subscriptionUrl) cappedIncoming[k].subscriptionUrl = targetUrl
+    }
+  }
+
+  // Keep articles from other feeds intact
+  var others = []
+  if (targetUrl) {
+    for (var i = 0; i < existing.length; i++) {
+      var it = existing[i]
+      var itemFeed = String((it && (it.feedUrl || it.subscriptionUrl)) || "").trim()
+      if (itemFeed !== targetUrl) {
+        others.push(it)
+      }
+    }
+  } else {
+    others = existing.slice()
+  }
+
+  // Combine new incoming articles with existing others (incoming first so newest data takes precedence)
+  var combined = cappedIncoming.concat(others)
+
+  // Deduplicate by itemIdentity
+  var seen = {}
+  var deduped = []
+  for (var j = 0; j < combined.length; j++) {
+    var item = combined[j]
+    var id = itemIdentity(item)
+    if (!id || seen[id]) continue
+    seen[id] = true
+    deduped.push(item)
+  }
+
+  // Sort newest first
+  deduped = recentList(deduped, deduped.length || 1)
+
+  // Prune by retention days
+  var pruned = pruneArticlesByRetention(deduped, retentionDays)
+
+  // Enrich with subscription metadata
+  return enrichArticles(pruned, subscriptions)
+}
+
+function createFetchScheduler(options) {
+  var opts = options || {}
+  var maxConcurrent = Math.max(1, Math.min(16, Number(opts.maxConcurrent) || MAX_CONCURRENT_FETCHES))
+  var fetchFn = typeof opts.fetchFn === "function" ? opts.fetchFn : null
+  var onFeedPublished = typeof opts.onFeedPublished === "function" ? opts.onFeedPublished : null
+  var onProgress = typeof opts.onProgress === "function" ? opts.onProgress : null
+  var onBatchComplete = typeof opts.onBatchComplete === "function" ? opts.onBatchComplete : null
+
+  var queue = []
+  var activeWorkers = {}
+  var totalFeeds = 0
+  var completedFeeds = 0
+  var failedFeeds = 0
+  var isFetching = false
+  var refreshPending = false
+  var articles = (opts.initialArticles || []).slice()
+  var subscriptions = opts.subscriptions || []
+
+  function getStatus() {
+    return {
+      isFetching: isFetching,
+      refreshPending: refreshPending,
+      totalFeeds: totalFeeds,
+      completedFeeds: completedFeeds,
+      failedFeeds: failedFeeds,
+      queuedFeeds: queue.length,
+      activeFetches: Object.keys(activeWorkers).length,
+      articles: articles
+    }
+  }
+
+  function pump() {
+    while (Object.keys(activeWorkers).length < maxConcurrent && queue.length > 0) {
+      var url = queue.shift()
+      if (!isHttpsUrl(url)) {
+        completedFeeds++
+        failedFeeds++
+        if (onProgress) onProgress(getStatus())
+        continue
+      }
+
+      var workerId = "w_" + Math.random().toString(36).slice(2, 9)
+      activeWorkers[workerId] = url
+
+      if (onProgress) onProgress(getStatus())
+
+      if (fetchFn) {
+        (function(wId, targetUrl) {
+          fetchFn(targetUrl, function(err, result) {
+            delete activeWorkers[wId]
+            if (err || !result || !result.ok) {
+              failedFeeds++
+              completedFeeds++
+            } else {
+              completedFeeds++
+              var incomingItems = result.items || []
+              articles = mergeFeedArticles(
+                articles,
+                incomingItems,
+                targetUrl,
+                opts.maxItemsPerFeed,
+                opts.retentionDays,
+                subscriptions
+              )
+              if (onFeedPublished) {
+                onFeedPublished(targetUrl, articles, getStatus())
+              }
+            }
+
+            if (onProgress) onProgress(getStatus())
+
+            if (Object.keys(activeWorkers).length === 0 && queue.length === 0) {
+              isFetching = false
+              if (onBatchComplete) onBatchComplete(articles, getStatus())
+              if (refreshPending) {
+                refreshPending = false
+                start(opts.getFeedUrls ? opts.getFeedUrls() : [])
+              }
+            } else {
+              pump()
+            }
+          })
+        })(workerId, url)
+      }
+    }
+
+    if (Object.keys(activeWorkers).length === 0 && queue.length === 0) {
+      isFetching = false
+      if (onBatchComplete) onBatchComplete(articles, getStatus())
+      if (refreshPending) {
+        refreshPending = false
+        start(opts.getFeedUrls ? opts.getFeedUrls() : [])
+      }
+    }
+  }
+
+  function start(urls) {
+    if (isFetching) {
+      refreshPending = true
+      return
+    }
+
+    var list = urls || []
+    var dedupedUrls = []
+    var seen = {}
+    for (var i = 0; i < list.length; i++) {
+      var u = String(list[i] || "").trim()
+      if (isHttpsUrl(u) && !seen[u]) {
+        seen[u] = true
+        dedupedUrls.push(u)
+      }
+    }
+
+    if (dedupedUrls.length === 0) {
+      isFetching = false
+      refreshPending = false
+      totalFeeds = 0
+      completedFeeds = 0
+      failedFeeds = 0
+      queue = []
+      if (onBatchComplete) onBatchComplete(articles, getStatus())
+      return
+    }
+
+    queue = dedupedUrls.slice()
+    totalFeeds = dedupedUrls.length
+    completedFeeds = 0
+    failedFeeds = 0
+    isFetching = true
+    refreshPending = false
+
+    if (onProgress) onProgress(getStatus())
+    pump()
+  }
+
+  function setSubscriptions(subs) {
+    subscriptions = subs || []
+  }
+
+  function setArticles(arts) {
+    articles = arts || []
+  }
+
+  return {
+    start: start,
+    getStatus: getStatus,
+    setSubscriptions: setSubscriptions,
+    setArticles: setArticles,
+    MAX_CONCURRENT: maxConcurrent
+  }
+}
+
 function extractCategories(subscriptions, articles, readSet) {
   var subs = normalizeSubscriptions(subscriptions)
   var arts = enrichArticles(articles, subs)
@@ -1342,6 +1549,9 @@ if (typeof module !== "undefined" && module.exports) {
     addSubscription: addSubscription,
     removeSubscription: removeSubscription,
     pruneArticlesBySubscriptions: pruneArticlesBySubscriptions,
+    mergeFeedArticles: mergeFeedArticles,
+    MAX_CONCURRENT_FETCHES: MAX_CONCURRENT_FETCHES,
+    createFetchScheduler: createFetchScheduler,
     DEFAULT_RETENTION_DAYS: DEFAULT_RETENTION_DAYS,
     MIN_RETENTION_DAYS: MIN_RETENTION_DAYS,
     MAX_RETENTION_DAYS: MAX_RETENTION_DAYS,

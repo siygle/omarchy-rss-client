@@ -83,11 +83,12 @@ BarWidget {
     return home + "/.local/share/omarchy-rss-reeder/state.json"
   }
   property var items: []
-  property var pendingUrls: []
-  property var collectedItems: []
-  property var seenUrls: []
-  property string currentFetchUrl: ""
-  property bool restartWhenIdle: false
+  property var pendingFetchQueue: []
+  property int totalFeeds: 0
+  property int completedFeeds: 0
+  property int failedFeeds: 0
+  property bool isFetching: false
+  property bool refreshPending: false
   property bool stateReady: false
 
   function applyRetentionCleanup() {
@@ -120,6 +121,10 @@ BarWidget {
     if ("unreadOnlyDefault" in target) target.unreadOnlyDefault = root.configuredUnreadOnlyDefault
     if ("barSection" in target) target.barSection = root.configuredBarSection
     if ("readSet" in target) target.readSet = root.readSet
+    if ("isFetching" in target) target.isFetching = root.isFetching
+    if ("totalFeeds" in target) target.totalFeeds = root.totalFeeds
+    if ("completedFeeds" in target) target.completedFeeds = root.completedFeeds
+    if ("failedFeeds" in target) target.failedFeeds = root.failedFeeds
     if ("lastImportResult" in target) target.lastImportResult = root.lastImportResult
     if ("shareStatus" in target && root.lastImportMessage) target.shareStatus = root.lastImportMessage
   }
@@ -394,127 +399,194 @@ BarWidget {
     if (panelLoader.item) panelLoader.item.close()
   }
 
-  function enqueueUnique(urls) {
-    var queue = root.pendingUrls ? root.pendingUrls.slice() : []
-    var seen = root.seenUrls ? root.seenUrls.slice() : []
-    var list = urls || []
-    for (var i = 0; i < list.length; i++) {
-      var url = String(list[i] || "")
-      if (!Model.isHttpsUrl(url)) continue
+  Timer {
+    id: persistDebounceTimer
+    interval: 1000
+    repeat: false
+    onTriggered: root.persistState()
+  }
+
+  function enqueueDiscovered(discoveredUrls) {
+    if (!discoveredUrls || !discoveredUrls.length) return
+    var queue = (root.pendingFetchQueue || []).slice()
+    var added = 0
+    for (var i = 0; i < discoveredUrls.length; i++) {
+      var u = String(discoveredUrls[i] || "").trim()
+      if (!Model.isHttpsUrl(u)) continue
       var already = false
-      for (var s = 0; s < seen.length; s++) if (seen[s] === url) already = true
-      for (var q = 0; q < queue.length; q++) if (queue[q] === url) already = true
-      if (already) continue
-      seen.push(url)
-      queue.unshift(url)
-    }
-    root.seenUrls = seen
-    root.pendingUrls = queue
-  }
-
-  function applyBody(raw) {
-    var split = Model.splitFetchedBody(raw)
-    var body = split.body
-    if (!Model.isFeedTextResponse(split.contentType, body)) return
-    var parsed = Model.parseFeed(body)
-    if (parsed.ok && parsed.items && parsed.items.length) {
-      var sub = root.subscriptionMap[root.currentFetchUrl] || {}
-      var subCat = sub.category || ""
-      var subCatPath = sub.categoryPath || (subCat ? [subCat] : [])
-      var feedTitle = parsed.feedName || sub.title || Model.extractDomainTitle(root.currentFetchUrl)
-
-      var next = []
-      var existing = root.collectedItems || []
-      for (var i = 0; i < existing.length; i++) next.push(existing[i])
-
-      var incoming = Model.recentList(parsed.items, root.configuredMaxItemsPerFeed)
-      for (var j = 0; j < incoming.length; j++) {
-        var it = incoming[j]
-        it.feedUrl = root.currentFetchUrl
-        it.subscriptionUrl = root.currentFetchUrl
-        it.feedName = feedTitle
-        it.feedTitle = feedTitle
-        it.category = subCat
-        it.categoryPath = subCatPath
-        next.push(it)
+      for (var q = 0; q < queue.length; q++) {
+        if (queue[q] === u) { already = true; break }
       }
-      root.collectedItems = next
-      return
+      if (!already) {
+        queue.push(u)
+        added++
+      }
     }
-    if (!Model.looksLikeHtml(body)) return
-    var discovered = Model.discoverFeedUrls(body, root.currentFetchUrl)
-    if (!discovered || discovered.length === 0)
-      discovered = Model.guessFeedUrls(root.currentFetchUrl)
-    root.enqueueUnique(discovered)
+    if (added > 0) {
+      root.pendingFetchQueue = queue
+      root.totalFeeds += added
+      pumpQueue()
+    }
   }
 
-  function finishFetch() {
-    var rawItems = Model.uniqueItems(root.collectedItems)
-    var pruned = Model.pruneArticlesByRetention(rawItems, root.configuredRetentionDays)
-    root.items = Model.enrichArticles(pruned, root.configuredSubscriptions)
-    persistState()
+  function onWorkerFinished(worker, exitCode, rawOutput) {
+    var url = worker.currentUrl
+    worker.currentUrl = ""
+
+    if (exitCode === 0 && rawOutput) {
+      var split = Model.splitFetchedBody(rawOutput)
+      var body = split.body
+      if (Model.isFeedTextResponse(split.contentType, body)) {
+        var parsed = Model.parseFeed(body)
+        if (parsed.ok && parsed.items && parsed.items.length) {
+          var sub = root.subscriptionMap[url] || {}
+          var subCat = sub.category || ""
+          var subCatPath = sub.categoryPath || (subCat ? [subCat] : [])
+          var feedTitle = parsed.feedName || sub.title || Model.extractDomainTitle(url)
+
+          var incoming = []
+          var nowMs = Date.now()
+          for (var j = 0; j < parsed.items.length; j++) {
+            var it = parsed.items[j]
+            it.feedUrl = url
+            it.subscriptionUrl = url
+            it.feedName = feedTitle
+            it.feedTitle = feedTitle
+            it.category = subCat
+            it.categoryPath = subCatPath
+            if (it.pubDateMs === undefined || it.pubDateMs === null) {
+              it.fetchedAtMs = nowMs
+            }
+            incoming.push(it)
+          }
+
+          // Incrementally merge articles into root.items immediately!
+          root.items = Model.mergeFeedArticles(
+            root.items,
+            incoming,
+            url,
+            root.configuredMaxItemsPerFeed,
+            root.configuredRetentionDays,
+            root.configuredSubscriptions
+          )
+
+          // Immediately update UI / Panel
+          injectPanel()
+
+          // Schedule debounced state save
+          persistDebounceTimer.restart()
+        } else if (Model.looksLikeHtml(body)) {
+          var discovered = Model.discoverFeedUrls(body, url)
+          if (!discovered || discovered.length === 0)
+            discovered = Model.guessFeedUrls(url)
+          enqueueDiscovered(discovered)
+        }
+      } else {
+        root.failedFeeds++
+      }
+    } else {
+      root.failedFeeds++
+    }
+
+    root.completedFeeds++
     injectPanel()
+    pumpQueue()
   }
 
-  function fetchNext() {
-    var queue = root.pendingUrls
-    if (!queue || queue.length === 0) {
-      root.finishFetch()
-      return
+  function pumpQueue() {
+    var pool = [fetchWorker0, fetchWorker1, fetchWorker2, fetchWorker3]
+    var anyRunning = false
+
+    for (var i = 0; i < pool.length; i++) {
+      var w = pool[i]
+      if (w.running) {
+        anyRunning = true
+        continue
+      }
+
+      if (root.pendingFetchQueue && root.pendingFetchQueue.length > 0) {
+        var nextUrl = root.pendingFetchQueue[0]
+        var rest = []
+        for (var r = 1; r < root.pendingFetchQueue.length; r++) rest.push(root.pendingFetchQueue[r])
+        root.pendingFetchQueue = rest
+
+        if (!Model.isHttpsUrl(nextUrl)) {
+          root.completedFeeds++
+          root.failedFeeds++
+          i--
+          continue
+        }
+
+        w.currentUrl = nextUrl
+        w.command = [
+          "curl", "-fsSL",
+          "--proto", "=https",
+          "--proto-redir", "=https",
+          "--max-redirs", "5",
+          "--max-filesize", String(Model.maxFeedBytes()),
+          "--max-time", "20",
+          "-A", "omarchy-rss-reeder/0.1.0",
+          "-H", "Accept: application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.9, text/html;q=0.8",
+          "-w", "\n__OMARCHY_CT__:%{content_type}",
+          nextUrl
+        ]
+        w.running = true
+        anyRunning = true
+      }
     }
-    var next = queue[0]
-    var rest = []
-    for (var i = 1; i < queue.length; i++) rest.push(queue[i])
-    root.pendingUrls = rest
-    if (!Model.isHttpsUrl(next)) {
-      root.fetchNext()
-      return
+
+    if (!anyRunning && (!root.pendingFetchQueue || root.pendingFetchQueue.length === 0)) {
+      root.isFetching = false
+      persistDebounceTimer.stop()
+      root.persistState()
+      if (root.refreshPending) {
+        root.refreshPending = false
+        root.startFetch()
+        return
+      }
+      root.injectPanel()
     }
-    root.currentFetchUrl = next
-    var seen = root.seenUrls ? root.seenUrls.slice() : []
-    var known = false
-    for (var s = 0; s < seen.length; s++) if (seen[s] === next) known = true
-    if (!known) {
-      seen.push(next)
-      root.seenUrls = seen
-    }
-    fetchProcess.command = [
-      "curl", "-fsSL",
-      "--proto", "=https",
-      "--proto-redir", "=https",
-      "--max-redirs", "5",
-      "--max-filesize", String(Model.maxFeedBytes()),
-      "--max-time", "20",
-      "-A", "omarchy-rss-reeder/0.1.0",
-      "-H", "Accept: application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.9, text/html;q=0.8",
-      "-w", "\n__OMARCHY_CT__:%{content_type}",
-      next
-    ]
-    fetchProcess.running = true
   }
 
   function startFetch() {
-    var urls = root.configuredFeedUrls
-    root.collectedItems = []
-    root.seenUrls = []
-    root.currentFetchUrl = ""
-    root.restartWhenIdle = false
-    if (!urls || urls.length === 0) {
-      root.pendingUrls = []
+    var urls = root.configuredFeedUrls || []
+    if (urls.length === 0) {
+      root.pendingFetchQueue = []
       root.items = []
+      root.totalFeeds = 0
+      root.completedFeeds = 0
+      root.failedFeeds = 0
+      root.isFetching = false
+      root.refreshPending = false
+      persistDebounceTimer.stop()
       persistState()
       injectPanel()
       return
     }
+
     var queue = []
-    for (var i = 0; i < urls.length; i++) queue.push(urls[i])
-    root.pendingUrls = queue
-    root.fetchNext()
+    var seen = {}
+    for (var i = 0; i < urls.length; i++) {
+      var u = String(urls[i] || "").trim()
+      if (Model.isHttpsUrl(u) && !seen[u]) {
+        seen[u] = true
+        queue.push(u)
+      }
+    }
+
+    root.pendingFetchQueue = queue
+    root.totalFeeds = queue.length
+    root.completedFeeds = 0
+    root.failedFeeds = 0
+    root.isFetching = true
+    root.refreshPending = false
+    injectPanel()
+    pumpQueue()
   }
 
   function fetchFeed() {
-    if (fetchProcess.running) {
-      root.restartWhenIdle = true
+    if (root.isFetching) {
+      root.refreshPending = true
       return
     }
     root.startFetch()
@@ -592,18 +664,50 @@ BarWidget {
   }
 
   Process {
-    id: fetchProcess
+    id: fetchWorker0
+    property string currentUrl: ""
     stdout: StdioCollector {
-      id: fetchStdout
+      id: fetchWorker0Stdout
       waitForEnd: true
-      onStreamFinished: root.applyBody(fetchStdout.text)
     }
-    onExited: function() {
-      if (root.restartWhenIdle) {
-        root.startFetch()
-        return
-      }
-      root.fetchNext()
+    onExited: function(exitCode) {
+      root.onWorkerFinished(fetchWorker0, exitCode, fetchWorker0Stdout.text)
+    }
+  }
+
+  Process {
+    id: fetchWorker1
+    property string currentUrl: ""
+    stdout: StdioCollector {
+      id: fetchWorker1Stdout
+      waitForEnd: true
+    }
+    onExited: function(exitCode) {
+      root.onWorkerFinished(fetchWorker1, exitCode, fetchWorker1Stdout.text)
+    }
+  }
+
+  Process {
+    id: fetchWorker2
+    property string currentUrl: ""
+    stdout: StdioCollector {
+      id: fetchWorker2Stdout
+      waitForEnd: true
+    }
+    onExited: function(exitCode) {
+      root.onWorkerFinished(fetchWorker2, exitCode, fetchWorker2Stdout.text)
+    }
+  }
+
+  Process {
+    id: fetchWorker3
+    property string currentUrl: ""
+    stdout: StdioCollector {
+      id: fetchWorker3Stdout
+      waitForEnd: true
+    }
+    onExited: function(exitCode) {
+      root.onWorkerFinished(fetchWorker3, exitCode, fetchWorker3Stdout.text)
     }
   }
 

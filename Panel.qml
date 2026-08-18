@@ -28,6 +28,10 @@ Panel {
   property string barSection: "right"
   property var lastImportResult: null
   property string shareStatus: ""
+  property bool isFetching: hostWidget ? hostWidget.isFetching === true : false
+  property int totalFeeds: hostWidget ? hostWidget.totalFeeds : 0
+  property int completedFeeds: hostWidget ? hostWidget.completedFeeds : 0
+  property int failedFeeds: hostWidget ? hostWidget.failedFeeds : 0
 
   // Views: "reader" | "settings" | "subscriptions"
   property string currentView: "reader"
@@ -53,6 +57,10 @@ Panel {
       root.barSection = root.hostWidget.configuredBarSection
       root.lastImportResult = root.hostWidget.lastImportResult
       root.shareStatus = root.hostWidget.lastImportMessage
+      root.isFetching = root.hostWidget.isFetching === true
+      root.totalFeeds = root.hostWidget.totalFeeds
+      root.completedFeeds = root.hostWidget.completedFeeds
+      root.failedFeeds = root.hostWidget.failedFeeds
     }
     root.controller.show()
   }
@@ -176,6 +184,10 @@ Panel {
           contentFontFamily: root.contentFontFamily
           itemsPerPage: root.itemsPerPage
           unreadOnlyDefault: root.unreadOnlyDefault
+          isFetching: root.isFetching
+          totalFeeds: root.totalFeeds
+          completedFeeds: root.completedFeeds
+          failedFeeds: root.failedFeeds
 
           onOpenSettingsRequested: {
             root.currentView = "settings"

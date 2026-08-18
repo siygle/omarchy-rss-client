@@ -17,6 +17,10 @@ Item {
   property string contentFontFamily: Style.font.family
   property int itemsPerPage: 10
   property bool unreadOnlyDefault: false
+  property bool isFetching: hostWidget ? hostWidget.isFetching === true : false
+  property int totalFeeds: hostWidget ? hostWidget.totalFeeds : 0
+  property int completedFeeds: hostWidget ? hostWidget.completedFeeds : 0
+  property int failedFeeds: hostWidget ? hostWidget.failedFeeds : 0
 
   property string currentCategory: "all"
   property bool unreadOnly: unreadOnlyDefault
@@ -163,7 +167,8 @@ Item {
           text: "󰑐"
           font.family: root.contentFontFamily
           font.pixelSize: Math.round(Style.font.body * 1.15)
-          color: root.contentForeground
+          color: root.isFetching ? Color.accent : root.contentForeground
+          opacity: root.isFetching ? 0.75 : 1.0
         }
 
         MouseArea {
@@ -399,7 +404,7 @@ Item {
 
         Text {
           anchors.horizontalCenter: parent.horizontalCenter
-          text: (root.subscriptions || []).length === 0 ? "󰑫" : "󰄬"
+          text: (root.subscriptions || []).length === 0 ? "󰑫" : (root.isFetching ? "󰑐" : "󰄬")
           font.family: root.contentFontFamily
           font.pixelSize: Style.font.title
           color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.3)
@@ -409,8 +414,20 @@ Item {
           anchors.horizontalCenter: parent.horizontalCenter
           text: {
             if ((root.subscriptions || []).length === 0) return root.emptyCopy
+            if (root.isFetching && root.items.length === 0) {
+              if (root.totalFeeds > 0) {
+                return "Loading feeds… " + root.completedFeeds + " / " + root.totalFeeds
+              }
+              return "Loading feeds…"
+            }
             if (root.searchQuery) return "No articles match \"" + root.searchQuery + "\""
             if (root.unreadOnly) return "All caught up! No unread articles"
+            if (root.isFetching) {
+              if (root.totalFeeds > 0) {
+                return "Loading feeds… " + root.completedFeeds + " / " + root.totalFeeds
+              }
+              return "Loading feeds…"
+            }
             return "No articles in this category"
           }
           font.family: root.contentFontFamily
@@ -458,9 +475,15 @@ Item {
       anchors.rightMargin: Style.space(8)
       elide: Text.ElideRight
       text: {
-        if (root.totalFilteredCount === 0) return "0 articles"
         var start = root.currentPage * root.itemsPerPage + 1
         var end = Math.min(root.totalFilteredCount, (root.currentPage + 1) * root.itemsPerPage)
+        if (root.isFetching && root.totalFeeds > 0) {
+          if (root.totalFilteredCount === 0) {
+            return "Loading feeds… " + root.completedFeeds + " / " + root.totalFeeds
+          }
+          return "Showing " + start + "-" + end + " of " + root.totalFilteredCount + " · Updating (" + root.completedFeeds + "/" + root.totalFeeds + ")"
+        }
+        if (root.totalFilteredCount === 0) return "0 articles"
         return "Showing " + start + "-" + end + " of " + root.totalFilteredCount
       }
       font.family: root.contentFontFamily
