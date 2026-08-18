@@ -247,14 +247,21 @@ Item {
 
       // Scope Pill Badge
       Rectangle {
-        height: Style.space(24)
-        width: scopeText.implicitWidth + Style.space(12)
-        radius: Style.space(12)
-        color: root.currentCategory.toLowerCase() !== "all"
-          ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.14)
-          : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.05)
-        border.color: root.currentCategory.toLowerCase() !== "all" ? Color.accent : "transparent"
+        id: scopeBtn
+        height: Style.space(26)
+        width: scopeText.implicitWidth + Style.space(16)
+        radius: Style.space(4)
+        readonly property bool isCustomCat: root.currentCategory.toLowerCase() !== "all"
+        color: isCustomCat
+          ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.18)
+          : (scopeHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.04))
+        border.color: isCustomCat
+          ? Color.accent
+          : (scopeHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.18) : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.1))
         border.width: 1
+
+        Behavior on color { ColorAnimation { duration: 80 } }
+        Behavior on border.color { ColorAnimation { duration: 80 } }
 
         Row {
           anchors.centerIn: parent
@@ -266,11 +273,12 @@ Item {
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.caption
             font.bold: true
-            color: root.currentCategory.toLowerCase() !== "all" ? Color.accent : root.contentForeground
+            color: scopeBtn.isCustomCat ? Color.accent : root.contentForeground
           }
         }
 
         MouseArea {
+          id: scopeHover
           anchors.fill: parent
           hoverEnabled: true
           cursorShape: Qt.PointingHandCursor
@@ -286,25 +294,31 @@ Item {
 
       // Unread-Only Toggle Chip
       Rectangle {
-        height: Style.space(24)
-        width: unreadText.implicitWidth + Style.space(14)
-        radius: Style.space(12)
+        id: unreadBtn
+        height: Style.space(26)
+        width: unreadText.implicitWidth + Style.space(18)
+        radius: Style.space(4)
         color: root.unreadOnly
           ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.18)
-          : (unreadHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent")
-        border.color: root.unreadOnly ? Color.accent : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.12)
+          : (unreadHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.04))
+        border.color: root.unreadOnly
+          ? Color.accent
+          : (unreadHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.18) : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.1))
         border.width: 1
+
+        Behavior on color { ColorAnimation { duration: 80 } }
+        Behavior on border.color { ColorAnimation { duration: 80 } }
 
         Row {
           anchors.centerIn: parent
-          spacing: Style.space(4)
+          spacing: Style.space(5)
 
           Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             width: Style.space(5)
             height: width
             radius: width / 2
-            color: Color.accent
+            color: root.unreadOnly ? Color.accent : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.4)
           }
 
           Text {
@@ -312,7 +326,7 @@ Item {
             text: "Unread"
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.caption
-            font.bold: root.unreadOnly
+            font.bold: true
             color: root.unreadOnly ? Color.accent : root.contentForeground
           }
         }

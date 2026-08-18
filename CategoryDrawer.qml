@@ -14,7 +14,7 @@ Item {
   signal categorySelected(string categoryId)
   signal closeRequested()
 
-  readonly property int targetWidth: Style.space(136)
+  readonly property int targetWidth: Style.space(142)
 
   width: root.isOpen ? targetWidth : 0
   clip: true
@@ -25,7 +25,7 @@ Item {
 
   Rectangle {
     anchors.fill: parent
-    color: Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.03)
+    color: Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.02)
     border.color: Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.08)
     border.width: 1
     radius: Style.space(4)
@@ -33,12 +33,12 @@ Item {
     Column {
       anchors.fill: parent
       anchors.margins: Style.space(6)
-      spacing: Style.space(4)
+      spacing: Style.space(5)
 
       // Drawer Header
       Row {
         width: parent.width
-        height: Style.space(24)
+        height: Style.space(22)
         spacing: Style.space(4)
 
         Text {
@@ -47,7 +47,7 @@ Item {
           font.family: root.contentFontFamily
           font.pixelSize: Style.font.caption
           font.bold: true
-          color: Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.4)
+          color: Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.45)
         }
       }
 
@@ -57,7 +57,7 @@ Item {
         width: parent.width
         height: parent.height - Style.space(28)
         model: root.categories || []
-        spacing: Style.space(2)
+        spacing: Style.space(4)
         clip: true
 
         delegate: Rectangle {
@@ -70,10 +70,15 @@ Item {
           readonly property bool hovered: rowMouse.containsMouse
 
           color: isCurrent
-            ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.16)
-            : (hovered ? Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.06) : "transparent")
+            ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.18)
+            : (hovered ? Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.07) : Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.035))
+          border.color: isCurrent
+            ? Color.accent
+            : (hovered ? Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.14) : Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.07))
+          border.width: 1
 
           Behavior on color { ColorAnimation { duration: 80 } }
+          Behavior on border.color { ColorAnimation { duration: 80 } }
 
           Item {
             anchors.fill: parent
@@ -109,9 +114,9 @@ Item {
               text: modelData.name || "All"
               elide: Text.ElideRight
               font.family: root.contentFontFamily
-              font.pixelSize: Style.font.body
+              font.pixelSize: Style.font.caption
               font.bold: isCurrent
-              color: isCurrent ? Color.accent : root.contentForeground
+              color: isCurrent ? Color.accent : Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.85)
             }
           }
 
