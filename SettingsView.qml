@@ -108,6 +108,7 @@ Item {
           width: parent.width - Style.space(24)
           text: root.shareStatus
           elide: Text.ElideRight
+          textFormat: Text.PlainText
           font.family: root.contentFontFamily
           font.pixelSize: Style.font.caption
           font.bold: true
@@ -155,6 +156,7 @@ Item {
                 id: subBadgeText
                 anchors.centerIn: parent
                 text: String((root.subscriptions || []).length)
+                textFormat: Text.PlainText
                 font.family: root.contentFontFamily
                 font.pixelSize: Style.font.caption
                 font.bold: true
@@ -399,6 +401,7 @@ Item {
                         Text {
                           anchors.centerIn: parent
                           text: modelData + "m"
+                          textFormat: Text.PlainText
                           font.family: root.contentFontFamily
                           font.pixelSize: Style.font.caption
                           font.bold: root.pollIntervalMinutes === modelData
@@ -459,6 +462,7 @@ Item {
                         Text {
                           anchors.centerIn: parent
                           text: String(modelData)
+                          textFormat: Text.PlainText
                           font.family: root.contentFontFamily
                           font.pixelSize: Style.font.caption
                           font.bold: root.maxItemsPerFeed === modelData
@@ -519,6 +523,7 @@ Item {
                         Text {
                           anchors.centerIn: parent
                           text: String(modelData)
+                          textFormat: Text.PlainText
                           font.family: root.contentFontFamily
                           font.pixelSize: Style.font.caption
                           font.bold: root.itemsPerPage === modelData

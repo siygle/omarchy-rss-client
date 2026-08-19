@@ -168,6 +168,7 @@ Item {
         Text {
           anchors.verticalCenter: parent.verticalCenter
           text: "(" + (root.subscriptions || []).length + ")"
+          textFormat: Text.PlainText
           font.family: root.contentFontFamily
           font.pixelSize: Style.font.caption
           color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.45)
@@ -253,6 +254,7 @@ Item {
         Text {
           anchors.verticalCenter: parent.verticalCenter
           text: root.statusMessage
+          textFormat: Text.PlainText
           font.family: root.contentFontFamily
           font.pixelSize: Style.font.caption
           font.bold: true
@@ -306,6 +308,7 @@ Item {
             Text {
               anchors.fill: parent
               text: "Feed URL (https://...)"
+              textFormat: Text.PlainText
               font.family: root.contentFontFamily
               font.pixelSize: Style.font.body
               color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.3)
@@ -344,6 +347,7 @@ Item {
               Text {
                 anchors.fill: parent
                 text: "Title (optional)"
+                textFormat: Text.PlainText
                 font.family: root.contentFontFamily
                 font.pixelSize: Style.font.body
                 color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.3)
@@ -390,6 +394,7 @@ Item {
                   Text {
                     anchors.fill: parent
                     text: "New category..."
+                    textFormat: Text.PlainText
                     font.family: root.contentFontFamily
                     font.pixelSize: Style.font.caption
                     color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.35)
@@ -446,6 +451,7 @@ Item {
                   anchors.verticalCenter: parent.verticalCenter
                   text: root.selectedCategory ? root.selectedCategory : "Category: None"
                   elide: Text.ElideRight
+                  textFormat: Text.PlainText
                   font.family: root.contentFontFamily
                   font.pixelSize: Style.font.caption
                   font.bold: Boolean(root.selectedCategory)
@@ -544,6 +550,7 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         text: modelData.display
                         elide: Text.ElideRight
+                        textFormat: Text.PlainText
                         font.family: root.contentFontFamily
                         font.pixelSize: Style.font.caption
                         font.bold: isSelected
@@ -688,6 +695,7 @@ Item {
             Text {
               anchors.centerIn: parent
               text: modelData.enabled !== false ? "●" : ""
+              textFormat: Text.PlainText
               font.pixelSize: Style.font.caption
               color: Color.accent
             }
@@ -709,6 +717,7 @@ Item {
               width: parent.width
               text: modelData.title || modelData.url
               elide: Text.ElideRight
+              textFormat: Text.PlainText
               font.family: root.contentFontFamily
               font.pixelSize: Style.font.body
               font.bold: true
@@ -719,6 +728,7 @@ Item {
               width: parent.width
               text: modelData.url
               elide: Text.ElideRight
+              textFormat: Text.PlainText
               font.family: root.contentFontFamily
               font.pixelSize: Style.font.caption
               color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.4)
@@ -741,6 +751,7 @@ Item {
               id: catBadgeText
               anchors.centerIn: parent
               text: modelData.category || ""
+              textFormat: Text.PlainText
               font.family: root.contentFontFamily
               font.pixelSize: Style.font.caption
               font.bold: true

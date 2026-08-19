@@ -99,6 +99,7 @@ Item {
                 id: badgeText
                 anchors.centerIn: parent
                 text: String(modelData.unreadCount || 0)
+                textFormat: Text.PlainText
                 font.family: root.contentFontFamily
                 font.pixelSize: Style.font.caption
                 font.bold: true
@@ -113,6 +114,7 @@ Item {
               anchors.verticalCenter: parent.verticalCenter
               text: modelData.name || "All"
               elide: Text.ElideRight
+              textFormat: Text.PlainText
               font.family: root.contentFontFamily
               font.pixelSize: Style.font.caption
               font.bold: isCurrent

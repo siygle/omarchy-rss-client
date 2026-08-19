@@ -638,3 +638,39 @@ test("filterReaderArticles filters accurately using enriched subscription metada
   assert.equal(uncatInAll.length, 1);
 });
 
+test("OPML regression test: malicious HTML tags and remote images in outline text are parsed as literal strings", () => {
+  const opml = `<?xml version="1.0"?>
+<opml version="2.0">
+  <body>
+    <outline text="&lt;img src=&quot;https://attacker.invalid/pixel&quot;&gt;">
+      <outline
+        text="&lt;b&gt;Malicious Feed&lt;/b&gt;"
+        type="rss"
+        xmlUrl="https://example.com/feed.xml"
+      />
+    </outline>
+  </body>
+</opml>`;
+
+  const structured = Model.parseOpmlStructured(opml);
+  assert.equal(structured.totalFound, 1);
+  assert.equal(structured.invalidCount, 0);
+  assert.equal(structured.subscriptions.length, 1);
+
+  const sub = structured.subscriptions[0];
+  assert.equal(sub.url, "https://example.com/feed.xml");
+  // Expected: parser decodes XML entities into literal strings without evaluating them
+  assert.equal(sub.title, "<b>Malicious Feed</b>");
+  assert.equal(sub.category, '<img src="https://attacker.invalid/pixel">');
+  assert.deepEqual(sub.categoryPath, ['<img src="https://attacker.invalid/pixel">']);
+  assert.deepEqual(structured.categories, ['<img src="https://attacker.invalid/pixel">']);
+
+  // Verify import result calculation preserves metadata
+  const res = Model.calculateImportResult([], structured, "malicious.opml");
+  assert.equal(res.status, "success");
+  assert.equal(res.imported, 1);
+  assert.equal(res.newSubscriptions[0].category, '<img src="https://attacker.invalid/pixel">');
+  assert.equal(res.newSubscriptions[0].title, '<b>Malicious Feed</b>');
+});
+
+

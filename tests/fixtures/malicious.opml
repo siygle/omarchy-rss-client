@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head>
+    <title>&lt;img src="https://attacker.invalid/pixel"&gt;</title>
+  </head>
+  <body>
+    <outline text="&lt;img src=&quot;https://attacker.invalid/pixel&quot;&gt;" title="&lt;img src=&quot;https://attacker.invalid/pixel&quot;&gt;">
+      <outline
+        text="&lt;b&gt;TEST&lt;/b&gt;"
+        title="&lt;a href=&quot;https://attacker.invalid/&quot;&gt;click&lt;/a&gt;"
+        type="rss"
+        xmlUrl="https://example.com/feed.xml"
+      />
+    </outline>
+  </body>
+</opml>

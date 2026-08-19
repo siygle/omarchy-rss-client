@@ -132,6 +132,7 @@ Item {
       width: parent.width
       text: root.item.title || "Untitled"
       elide: Text.ElideRight
+      textFormat: Text.PlainText
       font.family: root.contentFontFamily
       font.pixelSize: Style.font.body
       font.bold: !root.isRead
@@ -149,6 +150,7 @@ Item {
         return parts.join(" · ")
       }
       elide: Text.ElideRight
+      textFormat: Text.PlainText
       font.family: root.contentFontFamily
       font.pixelSize: Style.font.caption
       color: root.mutedColor

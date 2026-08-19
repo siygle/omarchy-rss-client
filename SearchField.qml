@@ -63,6 +63,7 @@ Item {
         Text {
           anchors.fill: parent
           text: root.placeholderText
+          textFormat: Text.PlainText
           font.family: root.contentFontFamily
           font.pixelSize: Style.font.body
           color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.3)

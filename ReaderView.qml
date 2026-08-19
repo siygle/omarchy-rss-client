@@ -143,6 +143,7 @@ Item {
         var subCount = (root.subscriptions || []).length
         return subCount + (subCount === 1 ? " feed" : " feeds") + " · " + root.totalUnreadCount + " unread"
       }
+      textFormat: Text.PlainText
       font.family: root.contentFontFamily
       font.pixelSize: Style.font.caption
       font.bold: true
@@ -275,6 +276,7 @@ Item {
           Text {
             id: scopeText
             text: root.currentCategory.toLowerCase() === "all" ? "All feeds" : root.currentCategory
+            textFormat: Text.PlainText
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.caption
             font.bold: true
@@ -430,6 +432,7 @@ Item {
             }
             return "No articles in this category"
           }
+          textFormat: Text.PlainText
           font.family: root.contentFontFamily
           font.pixelSize: Style.font.body
           color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.5)
@@ -474,6 +477,7 @@ Item {
       anchors.right: paginationRow.visible ? paginationRow.left : parent.right
       anchors.rightMargin: Style.space(8)
       elide: Text.ElideRight
+      textFormat: Text.PlainText
       text: {
         var start = root.currentPage * root.itemsPerPage + 1
         var end = Math.min(root.totalFilteredCount, (root.currentPage + 1) * root.itemsPerPage)
@@ -531,6 +535,7 @@ Item {
       Text {
         anchors.verticalCenter: parent.verticalCenter
         text: (root.currentPage + 1) + " / " + root.totalPages
+        textFormat: Text.PlainText
         font.family: root.contentFontFamily
         font.pixelSize: Style.font.caption
         font.bold: true
