@@ -168,6 +168,9 @@ Panel {
           } else if (event.key === Qt.Key_M) {
             readerView.toggleReadCurrentArticle()
             event.accepted = true
+          } else if (event.key === Qt.Key_A) {
+            readerView.markAllRead()
+            event.accepted = true
           } else if (event.key === Qt.Key_R) {
             root.refreshFeeds()
             event.accepted = true

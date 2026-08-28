@@ -183,6 +183,17 @@ test("unread count is the New tab size", () => {
   assert.equal(Model.unreadCount(items, readSet), 2);
 });
 
+test("mark all read adds all current item identities to read set", () => {
+  const items = [
+    { identity: "a" },
+    { identity: "b" },
+    { identity: "c" },
+  ];
+  const readSet = Model.markAllRead(["older"], items);
+  assert.deepEqual(readSet, ["older", "a", "b", "c"]);
+  assert.equal(Model.unreadCount(items, readSet), 0);
+});
+
 test("compact counts display at most 99+", () => {
   assert.equal(Model.compactCount(0), "0");
   assert.equal(Model.compactCount(99), "99");
