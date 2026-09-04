@@ -35,6 +35,7 @@ Panel {
 
   // Views: "reader" | "settings" | "subscriptions"
   property string currentView: "reader"
+  property string subscriptionsReturnView: "settings"
 
   readonly property var barIdentity: hostWidget || root
   readonly property color contentForeground: bar ? bar.foreground : Color.foreground
@@ -52,6 +53,7 @@ Panel {
 
   function open() {
     root.currentView = "reader"
+    root.subscriptionsReturnView = "settings"
     root.shareStatus = ""
     root.lastImportResult = null
     if (root.hostWidget && typeof root.hostWidget.clearImportMessage === "function") {
@@ -118,6 +120,14 @@ Panel {
     }
   }
 
+  function openAddFeed() {
+    root.subscriptionsReturnView = "reader"
+    root.currentView = "subscriptions"
+    Qt.callLater(function() {
+      if (subsView && typeof subsView.startAddFeed === "function") subsView.startAddFeed()
+    })
+  }
+
   KeyboardPanel {
     id: panel
     anchorItem: root.anchorItem
@@ -133,7 +143,7 @@ Panel {
       anchors.fill: parent
       onCloseRequested: {
         if (root.currentView === "subscriptions") {
-          root.currentView = "settings"
+          root.currentView = root.subscriptionsReturnView
         } else if (root.currentView === "settings") {
           root.currentView = "reader"
         } else if (readerView.drawerOpen) {
@@ -215,6 +225,7 @@ Panel {
           onOpenSettingsRequested: {
             root.currentView = "settings"
           }
+          onAddFeedRequested: root.openAddFeed()
           onRefreshRequested: root.refreshFeeds()
         }
 
@@ -236,7 +247,10 @@ Panel {
           contentFontFamily: root.contentFontFamily
 
           onBackRequested: root.currentView = "reader"
-          onManageSubscriptionsRequested: root.currentView = "subscriptions"
+          onManageSubscriptionsRequested: {
+            root.subscriptionsReturnView = "settings"
+            root.currentView = "subscriptions"
+          }
           onImportOpmlRequested: root.requestOpmlFileImport()
           onExportOpmlRequested: root.requestOpmlFileExport()
         }
@@ -251,7 +265,7 @@ Panel {
           contentForeground: root.contentForeground
           contentFontFamily: root.contentFontFamily
 
-          onBackRequested: root.currentView = "settings"
+          onBackRequested: root.currentView = root.subscriptionsReturnView
           onSubscriptionsUpdated: function(next) {
             root.subscriptions = next
           }

@@ -6,6 +6,9 @@ All original RSS reader implementation credit goes to the upstream project and i
 
 ## Features added in this fork
 
+- **Quick add feed**: open the feed composer directly from the reader top bar.
+- **Edit existing feeds**: update a feed URL, title, or category from Manage feeds using the same composer as add feed.
+- **Cleaner Manage feeds list**: removes the unused per-feed enable/disable circle and keeps edit/delete actions focused.
 - **Mark all read action**: quickly mark the current unread articles as read from the reader UI.
 - **Category dropdown hit-testing fix**: improves category selection behavior so the dropdown/overlay handles pointer interaction correctly.
 

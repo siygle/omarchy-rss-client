@@ -16,6 +16,8 @@ Item {
   property string draftUrl: ""
   property string draftTitle: ""
   property string draftCategory: ""
+  property string editingUrl: ""
+  readonly property bool isEditing: Boolean(root.editingUrl)
   property string selectedCategory: ""
   property bool isCustomCategoryMode: false
   property bool categoryDropdownOpen: false
@@ -33,6 +35,7 @@ Item {
       root.draftUrl = ""
       root.draftTitle = ""
       root.draftCategory = ""
+      root.editingUrl = ""
       root.selectedCategory = ""
       root.isCustomCategoryMode = false
       root.categoryDropdownOpen = false
@@ -56,55 +59,60 @@ Item {
     return out
   }
 
-  function addFeed() {
-    console.log("[RSS-CLIENT] addFeed entered with draftUrl:", root.draftUrl)
+  function resetComposer() {
+    root.draftUrl = ""
+    root.draftTitle = ""
+    root.draftCategory = ""
+    root.editingUrl = ""
+    root.selectedCategory = ""
+    root.isCustomCategoryMode = false
+    root.categoryDropdownOpen = false
+    root.customCategoryText = ""
+  }
+
+  function startAddFeed() {
+    root.resetComposer()
+    root.showAddComposer = true
+    root.statusMessage = ""
+  }
+
+  function startEditFeed(sub) {
+    if (!sub) return
+    root.draftUrl = sub.url || ""
+    root.draftTitle = sub.title || ""
+    root.draftCategory = sub.category || ""
+    root.editingUrl = sub.url || ""
+    root.selectedCategory = sub.category || ""
+    root.isCustomCategoryMode = false
+    root.categoryDropdownOpen = false
+    root.customCategoryText = ""
+    root.showAddComposer = true
+    root.statusMessage = ""
+  }
+
+  function saveFeed() {
+    console.log("[RSS-CLIENT] saveFeed entered with draftUrl:", root.draftUrl, "editing:", root.editingUrl)
     var catToSave = root.isCustomCategoryMode ? root.customCategoryText : (root.selectedCategory || root.draftCategory)
-    var res = Model.addSubscription(root.subscriptions, root.draftUrl, root.draftTitle, catToSave)
+    var res = root.isEditing
+      ? Model.updateSubscription(root.subscriptions, root.editingUrl, root.draftUrl, root.draftTitle, catToSave)
+      : Model.addSubscription(root.subscriptions, root.draftUrl, root.draftTitle, catToSave)
     if (!res.ok) {
-      console.log("[RSS-CLIENT] addFeed failed:", res.error)
+      console.log("[RSS-CLIENT] saveFeed failed:", res.error)
       root.statusMessage = res.error
       root.statusIsError = true
       return
     }
 
-    console.log("[RSS-CLIENT] addFeed success, new count:", res.subscriptions.length)
-    root.statusMessage = "Added " + (res.newSub.title || res.newSub.url)
+    var saved = root.isEditing ? res.updatedSub : res.newSub
+    root.statusMessage = (root.isEditing ? "Updated " : "Added ") + (saved.title || saved.url)
     root.statusIsError = false
-    root.draftUrl = ""
-    root.draftTitle = ""
-    root.draftCategory = ""
-    root.selectedCategory = ""
-    root.isCustomCategoryMode = false
-    root.categoryDropdownOpen = false
-    root.customCategoryText = ""
+    root.resetComposer()
     root.showAddComposer = false
 
     if (root.hostWidget && typeof root.hostWidget.updateSubscriptions === "function") {
       root.hostWidget.updateSubscriptions(res.subscriptions)
     }
     root.subscriptionsUpdated(res.subscriptions)
-  }
-
-  function toggleSubEnabled(sub) {
-    var next = []
-    for (var i = 0; i < root.subscriptions.length; i++) {
-      var s = root.subscriptions[i]
-      if (s.url === sub.url) {
-        next.push({
-          url: s.url,
-          title: s.title,
-          categoryPath: s.categoryPath,
-          category: s.category,
-          enabled: !s.enabled
-        })
-      } else {
-        next.push(s)
-      }
-    }
-    if (root.hostWidget && typeof root.hostWidget.updateSubscriptions === "function") {
-      root.hostWidget.updateSubscriptions(next)
-    }
-    root.subscriptionsUpdated(next)
   }
 
   function removeSub(sub) {
@@ -219,12 +227,12 @@ Item {
           hoverEnabled: true
           cursorShape: Qt.PointingHandCursor
           onClicked: {
-            root.showAddComposer = !root.showAddComposer
-            root.selectedCategory = ""
-            root.isCustomCategoryMode = false
-            root.categoryDropdownOpen = false
-            root.customCategoryText = ""
-            root.statusMessage = ""
+            if (root.showAddComposer) {
+              root.resetComposer()
+              root.showAddComposer = false
+            } else {
+              root.startAddFeed()
+            }
           }
         }
       }
@@ -301,9 +309,9 @@ Item {
               root.draftUrl = text
               if (root.statusIsError) root.statusMessage = ""
             }
-            onAccepted: root.addFeed()
-            Keys.onReturnPressed: root.addFeed()
-            Keys.onEnterPressed: root.addFeed()
+            onAccepted: root.saveFeed()
+            Keys.onReturnPressed: root.saveFeed()
+            Keys.onEnterPressed: root.saveFeed()
             selectByMouse: true
 
             Text {
@@ -340,9 +348,9 @@ Item {
               font.pixelSize: Style.font.body
               color: root.contentForeground
               onTextChanged: root.draftTitle = text
-              onAccepted: root.addFeed()
-              Keys.onReturnPressed: root.addFeed()
-              Keys.onEnterPressed: root.addFeed()
+              onAccepted: root.saveFeed()
+              Keys.onReturnPressed: root.saveFeed()
+              Keys.onEnterPressed: root.saveFeed()
               selectByMouse: true
 
               Text {
@@ -388,9 +396,9 @@ Item {
                   font.pixelSize: Style.font.caption
                   color: root.contentForeground
                   onTextChanged: root.customCategoryText = text
-                  onAccepted: root.addFeed()
-                  Keys.onReturnPressed: root.addFeed()
-                  Keys.onEnterPressed: root.addFeed()
+                  onAccepted: root.saveFeed()
+                  Keys.onReturnPressed: root.saveFeed()
+                  Keys.onEnterPressed: root.saveFeed()
                   selectByMouse: true
 
                   Text {
@@ -493,7 +501,7 @@ Item {
 
             Text {
               anchors.centerIn: parent
-              text: "Save"
+              text: root.isEditing ? "Update" : "Save"
               font.family: root.contentFontFamily
               font.pixelSize: Style.font.body
               font.bold: true
@@ -503,7 +511,7 @@ Item {
             MouseArea {
               anchors.fill: parent
               cursorShape: parent.canSave ? Qt.PointingHandCursor : Qt.ArrowCursor
-              onClicked: root.addFeed()
+              onClicked: root.saveFeed()
             }
           }
         }
@@ -553,34 +561,9 @@ Item {
           anchors.rightMargin: Style.space(8)
           spacing: Style.space(8)
 
-          // Enable/Disable toggle indicator
-          Rectangle {
-            width: Style.space(18)
-            height: Style.space(18)
-            radius: width / 2
-            anchors.verticalCenter: parent.verticalCenter
-            color: modelData.enabled !== false ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.2) : "transparent"
-            border.color: modelData.enabled !== false ? Color.accent : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.2)
-            border.width: 1
-
-            Text {
-              anchors.centerIn: parent
-              text: modelData.enabled !== false ? "●" : ""
-              textFormat: Text.PlainText
-              font.pixelSize: Style.font.caption
-              color: Color.accent
-            }
-
-            MouseArea {
-              anchors.fill: parent
-              cursorShape: Qt.PointingHandCursor
-              onClicked: root.toggleSubEnabled(modelData)
-            }
-          }
-
           // Feed details (Title, Domain)
           Column {
-            width: parent.width - Style.space(30) - (catBadge.visible ? catBadge.width + Style.space(8) : 0) - Style.space(30)
+            width: parent.width - (catBadge.visible ? catBadge.width + Style.space(8) : 0) - Style.space(60)
             anchors.verticalCenter: parent.verticalCenter
             spacing: Style.space(1)
 
@@ -627,6 +610,31 @@ Item {
               font.pixelSize: Style.font.caption
               font.bold: true
               color: Color.accent
+            }
+          }
+
+          // Edit button
+          Rectangle {
+            width: Style.space(26)
+            height: Style.space(26)
+            radius: Style.space(4)
+            anchors.verticalCenter: parent.verticalCenter
+            color: editHover.containsMouse ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.15) : "transparent"
+
+            Text {
+              anchors.centerIn: parent
+              text: "󰏫"
+              font.family: root.contentFontFamily
+              font.pixelSize: Style.font.body
+              color: editHover.containsMouse ? Color.accent : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.45)
+            }
+
+            MouseArea {
+              id: editHover
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.startEditFeed(modelData)
             }
           }
 
