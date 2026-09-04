@@ -146,6 +146,8 @@ Panel {
           root.currentView = root.subscriptionsReturnView
         } else if (root.currentView === "settings") {
           root.currentView = "reader"
+        } else if (readerView.articleOpen) {
+          readerView.closeArticle()
         } else if (readerView.drawerOpen) {
           readerView.drawerOpen = false
         } else {
@@ -166,6 +168,13 @@ Panel {
         }
 
         if (root.currentView === "reader") {
+          if (readerView.articleOpen) {
+            if (event.key === Qt.Key_O) {
+              readerView.openExternalItem(readerView.openedArticle)
+              event.accepted = true
+            }
+            return
+          }
           if (event.key === Qt.Key_J || event.key === Qt.Key_Down) {
             readerView.selectNextArticle()
             event.accepted = true

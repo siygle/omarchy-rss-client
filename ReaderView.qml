@@ -28,6 +28,8 @@ Item {
   property int currentPage: 0
   property int selectedIndex: 0
   property bool drawerOpen: false
+  property var openedArticle: null
+  readonly property bool articleOpen: root.openedArticle !== null
 
   signal openSettingsRequested()
   signal addFeedRequested()
@@ -65,12 +67,25 @@ Item {
   }
 
   function activateItem(item) {
+    if (!item) return
+    root.openedArticle = item
+    if (root.hostWidget && typeof root.hostWidget.markItemRead === "function") {
+      root.hostWidget.markItemRead(item)
+    }
+  }
+
+  function openExternalItem(item) {
+    if (!item) return
     if (root.hostWidget && typeof root.hostWidget.activateItem === "function") {
       root.hostWidget.activateItem(item)
     } else {
       var url = Model.activateUrl(item)
       if (url) Qt.openUrlExternally(url)
     }
+  }
+
+  function closeArticle() {
+    root.openedArticle = null
   }
 
   function toggleReadItem(item) {
@@ -122,16 +137,19 @@ Item {
   onCurrentCategoryChanged: {
     root.currentPage = 0
     root.selectedIndex = 0
+    root.openedArticle = null
   }
 
   onUnreadOnlyChanged: {
     root.currentPage = 0
     root.selectedIndex = 0
+    root.openedArticle = null
   }
 
   onSearchQueryChanged: {
     root.currentPage = 0
     root.selectedIndex = 0
+    root.openedArticle = null
   }
 
   // 1. Header Bar (anchored top)
@@ -512,6 +530,7 @@ Item {
           contentFontFamily: root.contentFontFamily
 
           onActivated: root.activateItem(modelData)
+          onOpenExternal: root.openExternalItem(modelData)
           onToggleRead: root.toggleReadItem(modelData)
         }
       }
@@ -626,5 +645,19 @@ Item {
         }
       }
     }
+  }
+
+  ArticleDetailView {
+    id: articleDetailView
+    anchors.fill: parent
+    visible: root.articleOpen
+    z: 2000
+    item: root.openedArticle || ({})
+    isRead: Model.isRead(root.readSet, root.openedArticle)
+    contentForeground: root.contentForeground
+    contentFontFamily: root.contentFontFamily
+    onBackRequested: root.closeArticle()
+    onOpenExternalRequested: root.openExternalItem(root.openedArticle)
+    onToggleReadRequested: root.toggleReadItem(root.openedArticle)
   }
 }
