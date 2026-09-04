@@ -17,6 +17,11 @@ Item {
   property string contentFontFamily: Style.font.family
   property int itemsPerPage: 10
   property bool unreadOnlyDefault: false
+  property int readerFontSize: 16
+  property real readerLineHeight: 1.3
+  property var articleContentMap: ({})
+  property string articleFetchIdentity: ""
+  property string articleFetchStatus: ""
   property bool isFetching: hostWidget ? hostWidget.isFetching === true : false
   property int totalFeeds: hostWidget ? hostWidget.totalFeeds : 0
   property int completedFeeds: hostWidget ? hostWidget.completedFeeds : 0
@@ -86,6 +91,20 @@ Item {
 
   function closeArticle() {
     root.openedArticle = null
+  }
+
+  function fetchFullArticle(item) {
+    if (root.hostWidget && typeof root.hostWidget.fetchArticleContent === "function") {
+      root.hostWidget.fetchArticleContent(item)
+    }
+  }
+
+  function updateReaderPreferences(fontSize, lineHeight) {
+    root.readerFontSize = Model.readerFontSize(fontSize)
+    root.readerLineHeight = Model.readerLineHeight(lineHeight)
+    if (root.hostWidget && typeof root.hostWidget.updateReaderPreferences === "function") {
+      root.hostWidget.updateReaderPreferences(root.readerFontSize, root.readerLineHeight)
+    }
   }
 
   function toggleReadItem(item) {
@@ -653,11 +672,18 @@ Item {
     visible: root.articleOpen
     z: 2000
     item: root.openedArticle || ({})
+    fullText: root.openedArticle ? (root.articleContentMap[Model.itemIdentity(root.openedArticle)] || "") : ""
+    isFetchingFull: root.openedArticle && root.articleFetchIdentity === Model.itemIdentity(root.openedArticle) && root.articleFetchStatus === "loading"
+    fetchStatus: root.openedArticle && root.articleFetchIdentity === Model.itemIdentity(root.openedArticle) ? root.articleFetchStatus : ""
+    readerFontSize: root.readerFontSize
+    readerLineHeight: root.readerLineHeight
     isRead: Model.isRead(root.readSet, root.openedArticle)
     contentForeground: root.contentForeground
     contentFontFamily: root.contentFontFamily
     onBackRequested: root.closeArticle()
     onOpenExternalRequested: root.openExternalItem(root.openedArticle)
+    onFetchFullRequested: root.fetchFullArticle(root.openedArticle)
+    onReaderPreferencesChanged: function(fontSize, lineHeight) { root.updateReaderPreferences(fontSize, lineHeight) }
     onToggleReadRequested: root.toggleReadItem(root.openedArticle)
   }
 }

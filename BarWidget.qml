@@ -62,6 +62,8 @@ BarWidget {
   readonly property int configuredItemsPerPage: Model.pageSize(getSetting("itemsPerPage", 10))
   readonly property int configuredRetentionDays: Model.normalizeRetentionDays(getSetting("retentionDays", getSetting("feedRetentionDays", 30)))
   readonly property bool configuredUnreadOnlyDefault: getSetting("unreadOnlyDefault", false) === true
+  readonly property int configuredReaderFontSize: Model.readerFontSize(getSetting("readerFontSize", 16))
+  readonly property real configuredReaderLineHeight: Model.readerLineHeight(getSetting("readerLineHeight", 1.3))
   readonly property string configuredBarSection: {
     var fromLayout = Model.sectionFromLayout(root.bar && root.bar.layoutConfig, root.moduleName)
     if (fromLayout) return fromLayout
@@ -87,6 +89,9 @@ BarWidget {
   property bool isFetching: false
   property bool refreshPending: false
   property bool stateReady: false
+  property var articleContentMap: ({})
+  property string articleFetchIdentity: ""
+  property string articleFetchStatus: ""
 
   function applyRetentionCleanup() {
     if (!root.items || !root.items.length) return
@@ -116,6 +121,11 @@ BarWidget {
     if ("itemsPerPage" in target) target.itemsPerPage = root.configuredItemsPerPage
     if ("retentionDays" in target) target.retentionDays = root.configuredRetentionDays
     if ("unreadOnlyDefault" in target) target.unreadOnlyDefault = root.configuredUnreadOnlyDefault
+    if ("readerFontSize" in target) target.readerFontSize = root.configuredReaderFontSize
+    if ("readerLineHeight" in target) target.readerLineHeight = root.configuredReaderLineHeight
+    if ("articleContentMap" in target) target.articleContentMap = root.articleContentMap
+    if ("articleFetchIdentity" in target) target.articleFetchIdentity = root.articleFetchIdentity
+    if ("articleFetchStatus" in target) target.articleFetchStatus = root.articleFetchStatus
     if ("barSection" in target) target.barSection = root.configuredBarSection
     if ("readSet" in target) target.readSet = root.readSet
     if ("isFetching" in target) target.isFetching = root.isFetching
@@ -396,6 +406,36 @@ BarWidget {
 
   function markItemsRead(items) {
     applyLocalRead(Model.markAllRead(root.readSet, items))
+  }
+
+  function updateReaderPreferences(fontSize, lineHeight) {
+    persistSettings({
+      readerFontSize: Model.readerFontSize(fontSize),
+      readerLineHeight: Model.readerLineHeight(lineHeight)
+    })
+    injectPanel()
+  }
+
+  function fetchArticleContent(item) {
+    var url = Model.activateUrl(item)
+    var identity = Model.itemIdentity(item)
+    if (!url || !identity || articleFetchProcess.running) return
+    root.articleFetchIdentity = identity
+    root.articleFetchStatus = "loading"
+    articleFetchProcess.currentIdentity = identity
+    articleFetchProcess.command = [
+      "curl", "-fsSL",
+      "--proto", "=https",
+      "--proto-redir", "=https",
+      "--max-redirs", "5",
+      "--max-filesize", "1048576",
+      "--max-time", "20",
+      "-A", "omarchy-rss-client/0.1.0",
+      "-H", "Accept: text/html, application/xhtml+xml, application/xml;q=0.9, text/plain;q=0.8",
+      url
+    ]
+    articleFetchProcess.running = true
+    injectPanel()
   }
 
   function activateItem(item) {
@@ -717,6 +757,31 @@ BarWidget {
     }
     onExited: function(exitCode) {
       root.onWorkerFinished(fetchWorker3, exitCode, fetchWorker3Stdout.text)
+    }
+  }
+
+  Process {
+    id: articleFetchProcess
+    property string currentIdentity: ""
+    stdout: StdioCollector { id: articleFetchStdout; waitForEnd: true }
+    stderr: StdioCollector { id: articleFetchStderr; waitForEnd: true }
+    onExited: function(exitCode) {
+      if (exitCode === 0) {
+        var text = Model.extractReadableText(articleFetchStdout.text)
+        if (text) {
+          var next = {}
+          for (var key in root.articleContentMap) next[key] = root.articleContentMap[key]
+          next[articleFetchProcess.currentIdentity] = text
+          root.articleContentMap = next
+          root.articleFetchStatus = "success"
+        } else {
+          root.articleFetchStatus = "error"
+        }
+      } else {
+        root.articleFetchStatus = "error"
+      }
+      root.articleFetchIdentity = articleFetchProcess.currentIdentity
+      root.injectPanel()
     }
   }
 
