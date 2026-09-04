@@ -7,8 +7,8 @@ import "Model.js" as Model
 
 Panel {
   id: root
-  moduleName: "io.github.sanjyay.rss-reeder"
-  ipcTarget: "io.github.sanjyay.rss-reeder"
+  moduleName: "io.github.siygle.omarchy-rss-client"
+  ipcTarget: "io.github.siygle.omarchy-rss-client"
   manageIpc: false
 
   property var anchorItem: null

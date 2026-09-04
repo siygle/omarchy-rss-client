@@ -1,11 +1,11 @@
-# RSS-Reeder plugin
+# Omarchy RSS Client plugin
 
 A compact native desktop RSS and Atom reader for Omarchy.
 
 ## Language
 
 **Plugin**:
-The installable Omarchy Quattro package people add from this repository. Permanent id is `io.github.sanjyay.rss-reeder`. Display name is **RSS-Reeder**. Only one bar-widget instance. Default bar section is right.
+The installable Omarchy Quattro package people add from this repository. Permanent id is `io.github.siygle.omarchy-rss-client`. Display name is **Omarchy RSS Client**. Only one bar-widget instance. Default bar section is right.
 _Avoid_: applet, extension, widget-only, theme, `omarchy.*`, `rafaelvzago.rss` as the published id, Feeds, Blog posts
 
 **Bar widget**:

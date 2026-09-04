@@ -1,15 +1,15 @@
 # AGENTS.md
 
-Instructions for coding agents working on the Omarchy RSS-Reeder plugin (`io.github.sanjyay.rss-reeder`).
+Instructions for coding agents working on the Omarchy RSS Client plugin (`io.github.siygle.omarchy-rss-client`).
 
 ## Architecture
 
-The RSS-Reeder plugin is structured into three primary layers:
+The Omarchy RSS Client plugin is structured into three primary layers:
 
 1. **Bar Entry (`BarWidget.qml`)**:
    - Manages widget lifecycle, background polling timer, and process executions (`curl`, `mkdir`, `omarchy-file-select`).
    - Owns persistence for widget settings (`subscriptions`, `feedUrls`, `pollIntervalMinutes`, `maxItemsPerFeed`, `itemsPerPage`, `retentionDays`, `barSection`, `readIdentities`).
-   - Persists state and read identities to `$XDG_DATA_HOME/omarchy-rss-reeder/state.json` (with automatic migration from `$XDG_DATA_HOME/omarchy-rss-plugin/state.json`).
+   - Persists state and read identities to `$XDG_DATA_HOME/omarchy-rss-client/state.json` (with automatic migration from `$XDG_DATA_HOME/omarchy-rss-reeder/state.json` or `$XDG_DATA_HOME/omarchy-rss-plugin/state.json`).
    - Manages OPML file selection through `omarchy-file-select` and file reading processes.
 
 2. **User Interface (`Panel.qml`)**:

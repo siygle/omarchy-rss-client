@@ -57,17 +57,17 @@ Item {
   }
 
   function addFeed() {
-    console.log("[RSS-REEDER] addFeed entered with draftUrl:", root.draftUrl)
+    console.log("[RSS-CLIENT] addFeed entered with draftUrl:", root.draftUrl)
     var catToSave = root.isCustomCategoryMode ? root.customCategoryText : (root.selectedCategory || root.draftCategory)
     var res = Model.addSubscription(root.subscriptions, root.draftUrl, root.draftTitle, catToSave)
     if (!res.ok) {
-      console.log("[RSS-REEDER] addFeed failed:", res.error)
+      console.log("[RSS-CLIENT] addFeed failed:", res.error)
       root.statusMessage = res.error
       root.statusIsError = true
       return
     }
 
-    console.log("[RSS-REEDER] addFeed success, new count:", res.subscriptions.length)
+    console.log("[RSS-CLIENT] addFeed success, new count:", res.subscriptions.length)
     root.statusMessage = "Added " + (res.newSub.title || res.newSub.url)
     root.statusIsError = false
     root.draftUrl = ""
