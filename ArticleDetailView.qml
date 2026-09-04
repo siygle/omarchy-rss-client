@@ -83,7 +83,6 @@ Item {
       }
 
       Row {
-        visible: !root.zenMode
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         spacing: Style.space(3)
@@ -196,7 +195,7 @@ Item {
             text: "󰊴"
             font.family: root.contentFontFamily
             font.pixelSize: Math.round(Style.font.body * 1.15)
-            color: root.contentForeground
+            color: root.zenMode ? Color.accent : root.contentForeground
           }
 
           MouseArea {
@@ -204,7 +203,7 @@ Item {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onClicked: root.zenMode = true
+            onClicked: root.zenMode = !root.zenMode
           }
         }
 
@@ -265,7 +264,7 @@ Item {
 
       Column {
         id: articleColumn
-        width: root.zenMode ? Math.min(parent.width, Style.space(380)) : parent.width
+        width: parent.width
         anchors.horizontalCenter: parent.horizontalCenter
         spacing: root.zenMode ? Style.space(14) : Style.space(10)
 

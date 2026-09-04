@@ -145,8 +145,12 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(460))
-    contentHeight: panel.fittedContentHeight(Style.space(520))
+    contentWidth: readerView.articleOpen && readerView.articleZenMode
+      ? panel.fittedContentWidth(panel.availableCardWidth)
+      : panel.fittedContentWidth(Style.space(460))
+    contentHeight: readerView.articleOpen && readerView.articleZenMode
+      ? panel.cappedContentHeight(panel.availableCardHeight)
+      : panel.fittedContentHeight(Style.space(520))
 
     PanelKeyCatcher {
       id: keyCatcher

@@ -34,6 +34,7 @@ Item {
   property int selectedIndex: 0
   property bool drawerOpen: false
   property var openedArticle: null
+  property bool articleZenMode: false
   readonly property bool articleOpen: root.openedArticle !== null
 
   signal openSettingsRequested()
@@ -73,6 +74,7 @@ Item {
 
   function activateItem(item) {
     if (!item) return
+    root.articleZenMode = false
     root.openedArticle = item
     if (root.hostWidget && typeof root.hostWidget.markItemRead === "function") {
       root.hostWidget.markItemRead(item)
@@ -90,6 +92,7 @@ Item {
   }
 
   function closeArticle() {
+    root.articleZenMode = false
     root.openedArticle = null
   }
 
@@ -677,12 +680,14 @@ Item {
     fetchStatus: root.openedArticle && root.articleFetchIdentity === Model.itemIdentity(root.openedArticle) ? root.articleFetchStatus : ""
     readerFontSize: root.readerFontSize
     readerLineHeight: root.readerLineHeight
+    zenMode: root.articleZenMode
     isRead: Model.isRead(root.readSet, root.openedArticle)
     contentForeground: root.contentForeground
     contentFontFamily: root.contentFontFamily
     onBackRequested: root.closeArticle()
     onOpenExternalRequested: root.openExternalItem(root.openedArticle)
     onFetchFullRequested: root.fetchFullArticle(root.openedArticle)
+    onZenModeChanged: root.articleZenMode = zenMode
     onReaderPreferencesChanged: function(fontSize, lineHeight) { root.updateReaderPreferences(fontSize, lineHeight) }
     onToggleReadRequested: root.toggleReadItem(root.openedArticle)
   }
