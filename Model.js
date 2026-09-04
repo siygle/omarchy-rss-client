@@ -599,6 +599,49 @@ function addSubscription(subscriptions, inputUrl, inputTitle, inputCategory) {
   return { ok: true, newSub: newSub, subscriptions: next }
 }
 
+function updateSubscription(subscriptions, originalUrl, inputUrl, inputTitle, inputCategory) {
+  var original = String(originalUrl || "").trim().toLowerCase()
+  var url = normalizeFeedInputUrl(inputUrl)
+  var list = normalizeSubscriptions(subscriptions)
+
+  if (!original) {
+    return { ok: false, error: "Missing subscription to update", subscriptions: list }
+  }
+  if (!isHttpsUrl(url)) {
+    return { ok: false, error: "Please enter a valid HTTPS feed URL", subscriptions: list }
+  }
+
+  var target = null
+  for (var i = 0; i < list.length; i++) {
+    var existingUrl = String(list[i].url || "").trim().toLowerCase()
+    if (existingUrl === original) target = list[i]
+    else if (existingUrl === url.toLowerCase()) {
+      return { ok: false, error: "Already subscribed", subscriptions: list }
+    }
+  }
+
+  if (!target) {
+    return { ok: false, error: "Subscription not found", subscriptions: list }
+  }
+
+  var title = String(inputTitle || "").trim() || extractDomainTitle(url)
+  var catInfo = normalizeCategorySelection(inputCategory, list)
+  var updated = {
+    url: url,
+    title: title,
+    categoryPath: catInfo.categoryPath,
+    category: catInfo.category,
+    enabled: target.enabled !== false
+  }
+
+  var next = []
+  for (var n = 0; n < list.length; n++) {
+    if (String(list[n].url || "").trim().toLowerCase() === original) next.push(updated)
+    else next.push(list[n])
+  }
+  return { ok: true, updatedSub: updated, subscriptions: next }
+}
+
 function removeSubscription(subscriptions, targetUrl) {
   var url = String(targetUrl || "").trim().toLowerCase()
   var list = normalizeSubscriptions(subscriptions)
@@ -1548,6 +1591,7 @@ if (typeof module !== "undefined" && module.exports) {
     getAvailableCategories: getAvailableCategories,
     normalizeCategorySelection: normalizeCategorySelection,
     addSubscription: addSubscription,
+    updateSubscription: updateSubscription,
     removeSubscription: removeSubscription,
     pruneArticlesBySubscriptions: pruneArticlesBySubscriptions,
     mergeFeedArticles: mergeFeedArticles,

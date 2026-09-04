@@ -539,6 +539,28 @@ test("addSubscription with category selector and creation", () => {
   assert.deepEqual(res3.newSub.categoryPath, []);
 });
 
+test("updateSubscription edits an existing feed and prevents URL duplicates", () => {
+  const initial = [
+    { url: "https://a.example/rss", title: "A", category: "Old", categoryPath: ["Old"], enabled: false },
+    { url: "https://b.example/rss", title: "B", category: "Tech", categoryPath: ["Tech"], enabled: true }
+  ];
+
+  const updated = Model.updateSubscription(initial, "https://a.example/rss", "https://c.example/feed.xml", "C Feed", "tech");
+  assert.equal(updated.ok, true);
+  assert.deepEqual(updated.updatedSub, {
+    url: "https://c.example/feed.xml",
+    title: "C Feed",
+    category: "Tech",
+    categoryPath: ["Tech"],
+    enabled: false
+  });
+  assert.deepEqual(updated.subscriptions.map(s => s.url), ["https://c.example/feed.xml", "https://b.example/rss"]);
+
+  const duplicate = Model.updateSubscription(initial, "https://a.example/rss", "https://b.example/rss", "Duplicate", "");
+  assert.equal(duplicate.ok, false);
+  assert.equal(duplicate.error, "Already subscribed");
+});
+
 test("generateOpml round-trip preserves categorized and uncategorized subscriptions", () => {
   const subs = [
     { url: "https://archlinux.org/feeds/news/", title: "Arch Linux", category: "Linux", categoryPath: ["Linux"] },

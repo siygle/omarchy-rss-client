@@ -30,6 +30,7 @@ Item {
   property bool drawerOpen: false
 
   signal openSettingsRequested()
+  signal addFeedRequested()
   signal refreshRequested()
   signal markAllReadRequested()
 
@@ -161,6 +162,30 @@ Item {
       anchors.right: parent.right
       anchors.verticalCenter: parent.verticalCenter
       spacing: Style.space(3)
+
+      // Add feed action
+      Rectangle {
+        width: Style.space(30)
+        height: Style.space(30)
+        radius: Style.space(4)
+        color: addFeedHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent"
+
+        Text {
+          anchors.centerIn: parent
+          text: "󰐕"
+          font.family: root.contentFontFamily
+          font.pixelSize: Math.round(Style.font.body * 1.15)
+          color: root.contentForeground
+        }
+
+        MouseArea {
+          id: addFeedHover
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.addFeedRequested()
+        }
+      }
 
       // Refresh action
       Rectangle {
