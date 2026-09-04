@@ -7,10 +7,11 @@ import "Model.js" as Model
 
 BarWidget {
   id: root
-  moduleName: "io.github.sanjyay.rss-reeder"
+  moduleName: "io.github.siygle.omarchy-rss-client"
 
   readonly property var legacySettings: {
     var fromLayout = Model.entryFromLayout(root.bar && root.bar.layoutConfig, [
+      "io.github.siygle.omarchy-rss-client",
       "io.github.sanjyay.rss-reeder",
       "io.github.sanjyay.rssreeder",
       "io.github.rafaelvzago.rss"
@@ -64,7 +65,9 @@ BarWidget {
   readonly property string configuredBarSection: {
     var fromLayout = Model.sectionFromLayout(root.bar && root.bar.layoutConfig, root.moduleName)
     if (fromLayout) return fromLayout
-    var legacyFromLayout = Model.sectionFromLayout(root.bar && root.bar.layoutConfig, "io.github.rafaelvzago.rss")
+    var legacyFromLayout = Model.sectionFromLayout(root.bar && root.bar.layoutConfig, "io.github.sanjyay.rss-reeder")
+    if (legacyFromLayout) return legacyFromLayout
+    legacyFromLayout = Model.sectionFromLayout(root.bar && root.bar.layoutConfig, "io.github.rafaelvzago.rss")
     if (legacyFromLayout) return legacyFromLayout
     return Model.barSection(getSetting("barSection", "right"))
   }
@@ -74,7 +77,7 @@ BarWidget {
   readonly property int badgeCount: Model.unreadCount(root.items, root.readSet)
   readonly property string statePath: {
     var home = Quickshell.env("HOME") || ""
-    return home + "/.local/share/omarchy-rss-reeder/state.json"
+    return home + "/.local/share/omarchy-rss-client/state.json"
   }
   property var items: []
   property var pendingFetchQueue: []
@@ -258,14 +261,14 @@ BarWidget {
     var d = now.getDate()
     var monthStr = m < 10 ? ("0" + m) : String(m)
     var dayStr = d < 10 ? ("0" + d) : String(d)
-    return "rss-reeder-" + year + "-" + monthStr + "-" + dayStr + ".opml"
+    return "omarchy-rss-client-" + year + "-" + monthStr + "-" + dayStr + ".opml"
   }
 
   function requestOpmlFileExport() {
     if (opmlExportSelectProcess.running || opmlWriteProcess.running) return
     root.selectedExportPath = ""
     var defaultName = defaultExportFilename()
-    console.log("[RSS-REEDER] requestOpmlFileExport entered, defaultName:", defaultName)
+    console.log("[RSS-CLIENT] requestOpmlFileExport entered, defaultName:", defaultName)
     opmlExportSelectProcess.command = [
       "python3", "-c",
       "import argparse, os, sys, gi\n" +
@@ -273,7 +276,7 @@ BarWidget {
       "from gi.repository import Gio, GLib\n" +
       "parser = argparse.ArgumentParser(add_help=False)\n" +
       "parser.add_argument('--title', default='Save OPML file')\n" +
-      "parser.add_argument('--default-name', default='rss-reeder.opml')\n" +
+      "parser.add_argument('--default-name', default='omarchy-rss-client.opml')\n" +
       "parser.add_argument('--extensions', default='opml xml')\n" +
       "args, _ = parser.parse_known_args()\n" +
       "bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)\n" +
@@ -319,7 +322,7 @@ BarWidget {
     if (!/\.opml$/i.test(resolvedPath) && !/\.xml$/i.test(resolvedPath)) {
       resolvedPath += ".opml"
     }
-    console.log("[RSS-REEDER] handleSelectedExportFile target path:", resolvedPath)
+    console.log("[RSS-CLIENT] handleSelectedExportFile target path:", resolvedPath)
     var opmlContent = Model.generateOpml(root.configuredSubscriptions)
     opmlWriteProcess.targetPath = resolvedPath
     opmlWriteProcess.exportedCount = root.configuredSubscriptions.length
@@ -529,7 +532,7 @@ BarWidget {
           "--max-redirs", "5",
           "--max-filesize", String(Model.maxFeedBytes()),
           "--max-time", "20",
-          "-A", "omarchy-rss-reeder/0.1.0",
+          "-A", "omarchy-rss-client/0.1.0",
           "-H", "Accept: application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.9, text/html;q=0.8",
           "-w", "\n__OMARCHY_CT__:%{content_type}",
           nextUrl
@@ -638,7 +641,7 @@ BarWidget {
     id: mkdirProcess
     command: [
       "sh", "-c",
-      "mkdir -p \"$HOME/.local/share/omarchy-rss-reeder\"; if [ ! -f \"$HOME/.local/share/omarchy-rss-reeder/state.json\" ] && [ -f \"$HOME/.local/share/omarchy-rss-plugin/state.json\" ]; then cp \"$HOME/.local/share/omarchy-rss-plugin/state.json\" \"$HOME/.local/share/omarchy-rss-reeder/state.json\"; fi"
+      "mkdir -p \"$HOME/.local/share/omarchy-rss-client\"; if [ ! -f \"$HOME/.local/share/omarchy-rss-client/state.json\" ]; then if [ -f \"$HOME/.local/share/omarchy-rss-reeder/state.json\" ]; then cp \"$HOME/.local/share/omarchy-rss-reeder/state.json\" \"$HOME/.local/share/omarchy-rss-client/state.json\"; elif [ -f \"$HOME/.local/share/omarchy-rss-plugin/state.json\" ]; then cp \"$HOME/.local/share/omarchy-rss-plugin/state.json\" \"$HOME/.local/share/omarchy-rss-client/state.json\"; fi; fi"
     ]
     onExited: stateFile.reload()
   }
@@ -808,7 +811,7 @@ BarWidget {
       }
     }
     onExited: function(exitCode) {
-      console.log("[RSS-REEDER] opmlExportSelectProcess exited with code:", exitCode, "path:", root.selectedExportPath)
+      console.log("[RSS-CLIENT] opmlExportSelectProcess exited with code:", exitCode, "path:", root.selectedExportPath)
       if (exitCode === 0 && root.selectedExportPath) {
         root.handleSelectedExportFile(root.selectedExportPath)
       }
@@ -822,7 +825,7 @@ BarWidget {
     stdout: StdioCollector { id: opmlWriteStdout; waitForEnd: true }
     stderr: StdioCollector { id: opmlWriteStderr; waitForEnd: true }
     onExited: function(exitCode) {
-      console.log("[RSS-REEDER] opmlWriteProcess exited with code:", exitCode)
+      console.log("[RSS-CLIENT] opmlWriteProcess exited with code:", exitCode)
       if (exitCode !== 0) {
         var err = String(opmlWriteStderr.text || "").trim() || "Failed to write file"
         root.lastImportMessage = "Export failed: " + err
@@ -857,7 +860,7 @@ BarWidget {
     anchors.fill: parent
     bar: root.bar
     text: "󰑫"
-    tooltipText: root.badgeCount > 0 ? ("RSS-Reeder · " + root.badgeCount + " unread") : "RSS-Reeder"
+    tooltipText: root.badgeCount > 0 ? ("Omarchy RSS Client · " + root.badgeCount + " unread") : "Omarchy RSS Client"
     onPressed: function(buttonCode) {
       if (buttonCode === Qt.LeftButton) root.togglePanel()
     }

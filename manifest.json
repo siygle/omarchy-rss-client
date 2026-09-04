@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "id": "io.github.sanjyay.rss-reeder",
-  "name": "RSS-Reeder",
+  "id": "io.github.siygle.omarchy-rss-client",
+  "name": "Omarchy RSS Client",
   "version": "0.1.0",
-  "author": "sanjyay",
+  "author": "siygle",
   "license": "MIT",
   "description": "Native RSS and Atom reader for the Omarchy bar with OPML, categories, search, unread tracking, and configurable retention.",
   "kinds": ["bar-widget"],
@@ -11,7 +11,7 @@
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
-    "displayName": "RSS-Reeder",
+    "displayName": "Omarchy RSS Client",
     "category": "Productivity",
     "allowMultiple": false,
     "defaultSection": "right"
