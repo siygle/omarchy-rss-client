@@ -20,6 +20,7 @@ Item {
   property bool isCustomCategoryMode: false
   property bool categoryDropdownOpen: false
   property string customCategoryText: ""
+  readonly property int addComposerHeight: Style.space(110)
 
   property string statusMessage: ""
   property bool statusIsError: false
@@ -267,7 +268,7 @@ Item {
     Rectangle {
       visible: root.showAddComposer
       width: parent.width
-      height: Style.space(110)
+      height: root.addComposerHeight
       radius: Style.space(6)
       color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.03)
       border.color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.3)
@@ -358,6 +359,7 @@ Item {
 
           // Category Selector or Custom Input
           Item {
+            id: categorySelector
             width: (parent.width - Style.space(80) - Style.space(12)) / 2
             height: Style.space(28)
             z: 30
@@ -434,7 +436,10 @@ Item {
             // Dropdown Selector Button
             Rectangle {
               visible: !root.isCustomCategoryMode
-              anchors.fill: parent
+              anchors.top: parent.top
+              anchors.left: parent.left
+              anchors.right: parent.right
+              height: Style.space(28)
               radius: Style.space(4)
               color: catBtnHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.05)
               border.color: root.categoryDropdownOpen ? Color.accent : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.1)
@@ -476,140 +481,6 @@ Item {
               }
             }
 
-            // Dropdown Menu Popout
-            Rectangle {
-              visible: root.categoryDropdownOpen && !root.isCustomCategoryMode
-              anchors.top: parent.bottom
-              anchors.topMargin: Style.space(4)
-              anchors.left: parent.left
-              width: parent.width
-              height: Math.min(Style.space(200), (catMenuColumn.implicitHeight + Style.space(8)))
-              radius: Style.space(4)
-              color: Color.background
-              border.color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.2)
-              border.width: 1
-              z: 100
-              clip: true
-
-              Flickable {
-                anchors.fill: parent
-                anchors.margins: Style.space(4)
-                contentHeight: catMenuColumn.implicitHeight
-                boundsBehavior: Flickable.StopAtBounds
-
-                Column {
-                  id: catMenuColumn
-                  width: parent.width
-                  spacing: Style.space(2)
-
-                  // "No category" option
-                  Rectangle {
-                    width: parent.width
-                    height: Style.space(24)
-                    radius: Style.space(3)
-                    color: noCatHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : (!root.selectedCategory ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.12) : "transparent")
-
-                    Text {
-                      anchors.left: parent.left
-                      anchors.leftMargin: Style.space(6)
-                      anchors.verticalCenter: parent.verticalCenter
-                      text: "No category"
-                      font.family: root.contentFontFamily
-                      font.pixelSize: Style.font.caption
-                      font.bold: !root.selectedCategory
-                      color: !root.selectedCategory ? Color.accent : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.7)
-                    }
-
-                    MouseArea {
-                      id: noCatHover
-                      anchors.fill: parent
-                      hoverEnabled: true
-                      cursorShape: Qt.PointingHandCursor
-                      onClicked: {
-                        root.selectedCategory = ""
-                        root.categoryDropdownOpen = false
-                      }
-                    }
-                  }
-
-                  // Existing categories
-                  Repeater {
-                    model: Model.getAvailableCategories(root.subscriptions)
-                    delegate: Rectangle {
-                      width: catMenuColumn.width
-                      height: Style.space(24)
-                      radius: Style.space(3)
-                      readonly property bool isSelected: root.selectedCategory === modelData.display || root.selectedCategory === modelData.name
-                      color: catItemHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : (isSelected ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.12) : "transparent")
-
-                      Text {
-                        anchors.left: parent.left
-                        anchors.leftMargin: Style.space(6)
-                        anchors.right: parent.right
-                        anchors.rightMargin: Style.space(6)
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: modelData.display
-                        elide: Text.ElideRight
-                        textFormat: Text.PlainText
-                        font.family: root.contentFontFamily
-                        font.pixelSize: Style.font.caption
-                        font.bold: isSelected
-                        color: isSelected ? Color.accent : root.contentForeground
-                      }
-
-                      MouseArea {
-                        id: catItemHover
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                          root.selectedCategory = modelData.display
-                          root.categoryDropdownOpen = false
-                        }
-                      }
-                    }
-                  }
-
-                  // Separator
-                  Rectangle {
-                    width: parent.width
-                    height: 1
-                    color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.1)
-                  }
-
-                  // "+ Create new category" option
-                  Rectangle {
-                    width: parent.width
-                    height: Style.space(24)
-                    radius: Style.space(3)
-                    color: newCatBtnHover.containsMouse ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.15) : "transparent"
-
-                    Text {
-                      anchors.left: parent.left
-                      anchors.leftMargin: Style.space(6)
-                      anchors.verticalCenter: parent.verticalCenter
-                      text: "+ Create new category"
-                      font.family: root.contentFontFamily
-                      font.pixelSize: Style.font.caption
-                      font.bold: true
-                      color: Color.accent
-                    }
-
-                    MouseArea {
-                      id: newCatBtnHover
-                      anchors.fill: parent
-                      hoverEnabled: true
-                      cursorShape: Qt.PointingHandCursor
-                      onClicked: {
-                        root.isCustomCategoryMode = true
-                        root.categoryDropdownOpen = false
-                        root.customCategoryText = ""
-                      }
-                    }
-                  }
-                }
-              }
-            }
           }
 
           Rectangle {
@@ -653,7 +524,7 @@ Item {
     ListView {
       id: subListView
       width: parent.width
-      height: parent.height - Style.space(32) - (root.showAddComposer ? Style.space(118) : 0) - Style.space(36) - Style.space(8)
+      height: parent.height - Style.space(32) - (root.showAddComposer ? root.addComposerHeight + Style.space(8) : 0) - Style.space(36) - Style.space(8)
       model: root.filteredSubs
       spacing: Style.space(4)
       clip: true
@@ -781,6 +652,152 @@ Item {
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
               onClicked: root.removeSub(modelData)
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Root-level dropdown overlay. This avoids changing the Column/Row layout
+  // while keeping the popup in an item whose bounds cover the click target.
+  Item {
+    id: dropdownOverlay
+    anchors.fill: parent
+    visible: root.categoryDropdownOpen && !root.isCustomCategoryMode
+    z: 1000
+
+    MouseArea {
+      anchors.fill: parent
+      acceptedButtons: Qt.LeftButton
+      onClicked: root.categoryDropdownOpen = false
+    }
+
+    Rectangle {
+      // mapToItem() is unreliable here because this overlay is a sibling of
+      // the form content in Quickshell's panel tree. Compute the same visual
+      // position from the add-composer row geometry instead: left margin +
+      // title field width + row spacing.
+      x: Style.space(8) + ((dropdownOverlay.width - Style.space(16) - Style.space(80) - Style.space(12)) / 2) + Style.space(6)
+      y: Style.space(32) + (root.statusMessage ? Style.space(32) : 0) + Style.space(8) + Style.space(8) + Style.space(28) + Style.space(6) + Style.space(32)
+      width: categorySelector.width
+      height: Math.min(Style.space(200), overlayCatMenuColumn.implicitHeight + Style.space(8))
+      radius: Style.space(4)
+      color: Color.background
+      border.color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.2)
+      border.width: 1
+      clip: true
+
+      Flickable {
+        anchors.fill: parent
+        anchors.margins: Style.space(4)
+        contentHeight: overlayCatMenuColumn.implicitHeight
+        boundsBehavior: Flickable.StopAtBounds
+
+        Column {
+          id: overlayCatMenuColumn
+          width: parent.width
+          spacing: Style.space(2)
+
+          Rectangle {
+            width: parent.width
+            height: Style.space(24)
+            radius: Style.space(3)
+            color: overlayNoCatHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : (!root.selectedCategory ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.12) : "transparent")
+
+            Text {
+              anchors.left: parent.left
+              anchors.leftMargin: Style.space(6)
+              anchors.verticalCenter: parent.verticalCenter
+              text: "No category"
+              font.family: root.contentFontFamily
+              font.pixelSize: Style.font.caption
+              font.bold: !root.selectedCategory
+              color: !root.selectedCategory ? Color.accent : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.7)
+            }
+
+            MouseArea {
+              id: overlayNoCatHover
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: {
+                root.selectedCategory = ""
+                root.categoryDropdownOpen = false
+              }
+            }
+          }
+
+          Repeater {
+            model: Model.getAvailableCategories(root.subscriptions)
+            delegate: Rectangle {
+              width: overlayCatMenuColumn.width
+              height: Style.space(24)
+              radius: Style.space(3)
+              readonly property bool isSelected: root.selectedCategory === modelData.display || root.selectedCategory === modelData.name
+              color: overlayCatItemHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : (isSelected ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.12) : "transparent")
+
+              Text {
+                anchors.left: parent.left
+                anchors.leftMargin: Style.space(6)
+                anchors.right: parent.right
+                anchors.rightMargin: Style.space(6)
+                anchors.verticalCenter: parent.verticalCenter
+                text: modelData.display
+                elide: Text.ElideRight
+                textFormat: Text.PlainText
+                font.family: root.contentFontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: isSelected
+                color: isSelected ? Color.accent : root.contentForeground
+              }
+
+              MouseArea {
+                id: overlayCatItemHover
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                  root.selectedCategory = modelData.display
+                  root.categoryDropdownOpen = false
+                }
+              }
+            }
+          }
+
+          Rectangle {
+            width: parent.width
+            height: 1
+            color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.1)
+          }
+
+          Rectangle {
+            width: parent.width
+            height: Style.space(24)
+            radius: Style.space(3)
+            color: overlayNewCatBtnHover.containsMouse ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.15) : "transparent"
+
+            Text {
+              anchors.left: parent.left
+              anchors.leftMargin: Style.space(6)
+              anchors.verticalCenter: parent.verticalCenter
+              text: "+ Create new category"
+              font.family: root.contentFontFamily
+              font.pixelSize: Style.font.caption
+              font.bold: true
+              color: Color.accent
+            }
+
+            MouseArea {
+              id: overlayNewCatBtnHover
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: {
+                root.isCustomCategoryMode = true
+                root.categoryDropdownOpen = false
+                root.customCategoryText = ""
+              }
             }
           }
         }
