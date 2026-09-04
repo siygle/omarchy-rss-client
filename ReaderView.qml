@@ -92,6 +92,12 @@ Item {
     }
   }
 
+  function markAllRead() {
+    if (root.hostWidget && typeof root.hostWidget.markItemsRead === "function") {
+      root.hostWidget.markItemsRead(root.items)
+    }
+  }
+
   // Derived filtered articles model
   readonly property var allFilteredArticles: Model.filterReaderArticles(root.items, {
     category: root.currentCategory,
@@ -178,6 +184,30 @@ Item {
           hoverEnabled: true
           cursorShape: Qt.PointingHandCursor
           onClicked: root.refreshRequested()
+        }
+      }
+
+      // Mark all read action
+      Rectangle {
+        width: Style.space(30)
+        height: Style.space(30)
+        radius: Style.space(4)
+        color: markReadHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent"
+
+        Text {
+          anchors.centerIn: parent
+          text: "󰄬"
+          font.family: root.contentFontFamily
+          font.pixelSize: Math.round(Style.font.body * 1.15)
+          color: root.contentForeground
+        }
+
+        MouseArea {
+          id: markReadHover
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.markAllRead()
         }
       }
 
