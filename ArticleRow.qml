@@ -21,7 +21,8 @@ Item {
   width: parent ? parent.width : 300
 
   readonly property color mutedColor: Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.45)
-  readonly property bool hovered: mouseArea.containsMouse
+  readonly property bool actionHovered: markHover.containsMouse || linkHover.containsMouse
+  readonly property bool hovered: mouseArea.containsMouse || actionHovered
 
   Rectangle {
     anchors.fill: parent

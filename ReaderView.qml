@@ -35,6 +35,7 @@ Item {
   property bool drawerOpen: false
   property var openedArticle: null
   property bool articleZenMode: false
+  property bool markAllReadConfirming: false
   readonly property bool articleOpen: root.openedArticle !== null
 
   signal openSettingsRequested()
@@ -131,9 +132,23 @@ Item {
   }
 
   function markAllRead() {
+    if (!root.markAllReadConfirming) {
+      root.markAllReadConfirming = true
+      markAllReadConfirmTimer.restart()
+      return
+    }
+    markAllReadConfirmTimer.stop()
+    root.markAllReadConfirming = false
     if (root.hostWidget && typeof root.hostWidget.markItemsRead === "function") {
       root.hostWidget.markItemsRead(root.items)
     }
+  }
+
+  Timer {
+    id: markAllReadConfirmTimer
+    interval: 3000
+    repeat: false
+    onTriggered: root.markAllReadConfirming = false
   }
 
   // Derived filtered articles model
@@ -160,18 +175,21 @@ Item {
     root.currentPage = 0
     root.selectedIndex = 0
     root.openedArticle = null
+    root.markAllReadConfirming = false
   }
 
   onUnreadOnlyChanged: {
     root.currentPage = 0
     root.selectedIndex = 0
     root.openedArticle = null
+    root.markAllReadConfirming = false
   }
 
   onSearchQueryChanged: {
     root.currentPage = 0
     root.selectedIndex = 0
     root.openedArticle = null
+    root.markAllReadConfirming = false
   }
 
   // 1. Header Bar (anchored top)
@@ -252,19 +270,24 @@ Item {
         }
       }
 
-      // Mark all read action
+      // Mark all read action (requires a second click/key press to confirm)
       Rectangle {
-        width: Style.space(30)
+        width: root.markAllReadConfirming ? Style.space(72) : Style.space(30)
         height: Style.space(30)
         radius: Style.space(4)
-        color: markReadHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent"
+        color: root.markAllReadConfirming
+          ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.18)
+          : (markReadHover.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.08) : "transparent")
+        border.color: root.markAllReadConfirming ? Color.accent : "transparent"
+        border.width: root.markAllReadConfirming ? 1 : 0
 
         Text {
           anchors.centerIn: parent
-          text: "󰄬"
+          text: root.markAllReadConfirming ? "Confirm" : "󰄬"
           font.family: root.contentFontFamily
-          font.pixelSize: Math.round(Style.font.body * 1.15)
-          color: root.contentForeground
+          font.pixelSize: root.markAllReadConfirming ? Style.font.caption : Math.round(Style.font.body * 1.15)
+          font.bold: root.markAllReadConfirming
+          color: root.markAllReadConfirming ? Color.accent : root.contentForeground
         }
 
         MouseArea {
