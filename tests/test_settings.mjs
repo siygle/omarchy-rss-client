@@ -194,6 +194,25 @@ test("mark all read adds all current item identities to read set", () => {
   assert.equal(Model.unreadCount(items, readSet), 0);
 });
 
+test("reader article preferences are clamped", () => {
+  assert.equal(Model.readerFontSize(undefined), 16);
+  assert.equal(Model.readerFontSize(8), 12);
+  assert.equal(Model.readerFontSize(30), 24);
+  assert.equal(Model.readerFontSize(17.4), 17);
+  assert.equal(Model.readerLineHeight(undefined), 1.3);
+  assert.equal(Model.readerLineHeight(0.5), 1.0);
+  assert.equal(Model.readerLineHeight(3), 2.0);
+  assert.equal(Model.readerLineHeight(1.56), 1.6);
+});
+
+test("extractReadableText prefers article content and removes unsafe chrome", () => {
+  const html = `<!doctype html><html><body><nav>menu</nav><article><h1>Hello</h1><script>bad()</script><p>This is a readable article body with enough text to be selected by the readability helper instead of the surrounding page chrome.</p></article><footer>bye</footer></body></html>`;
+  const text = Model.extractReadableText(html);
+  assert.match(text, /Hello/);
+  assert.match(text, /readable article body/);
+  assert.doesNotMatch(text, /bad\(\)|menu|bye/);
+});
+
 test("compact counts display at most 99+", () => {
   assert.equal(Model.compactCount(0), "0");
   assert.equal(Model.compactCount(99), "99");

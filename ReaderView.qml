@@ -17,6 +17,11 @@ Item {
   property string contentFontFamily: Style.font.family
   property int itemsPerPage: 10
   property bool unreadOnlyDefault: false
+  property int readerFontSize: 16
+  property real readerLineHeight: 1.3
+  property var articleContentMap: ({})
+  property string articleFetchIdentity: ""
+  property string articleFetchStatus: ""
   property bool isFetching: hostWidget ? hostWidget.isFetching === true : false
   property int totalFeeds: hostWidget ? hostWidget.totalFeeds : 0
   property int completedFeeds: hostWidget ? hostWidget.completedFeeds : 0
@@ -28,6 +33,9 @@ Item {
   property int currentPage: 0
   property int selectedIndex: 0
   property bool drawerOpen: false
+  property var openedArticle: null
+  property bool articleZenMode: false
+  readonly property bool articleOpen: root.openedArticle !== null
 
   signal openSettingsRequested()
   signal addFeedRequested()
@@ -65,11 +73,40 @@ Item {
   }
 
   function activateItem(item) {
+    if (!item) return
+    root.articleZenMode = false
+    root.openedArticle = item
+    if (root.hostWidget && typeof root.hostWidget.markItemRead === "function") {
+      root.hostWidget.markItemRead(item)
+    }
+  }
+
+  function openExternalItem(item) {
+    if (!item) return
     if (root.hostWidget && typeof root.hostWidget.activateItem === "function") {
       root.hostWidget.activateItem(item)
     } else {
       var url = Model.activateUrl(item)
       if (url) Qt.openUrlExternally(url)
+    }
+  }
+
+  function closeArticle() {
+    root.articleZenMode = false
+    root.openedArticle = null
+  }
+
+  function fetchFullArticle(item) {
+    if (root.hostWidget && typeof root.hostWidget.fetchArticleContent === "function") {
+      root.hostWidget.fetchArticleContent(item)
+    }
+  }
+
+  function updateReaderPreferences(fontSize, lineHeight) {
+    root.readerFontSize = Model.readerFontSize(fontSize)
+    root.readerLineHeight = Model.readerLineHeight(lineHeight)
+    if (root.hostWidget && typeof root.hostWidget.updateReaderPreferences === "function") {
+      root.hostWidget.updateReaderPreferences(root.readerFontSize, root.readerLineHeight)
     }
   }
 
@@ -122,16 +159,19 @@ Item {
   onCurrentCategoryChanged: {
     root.currentPage = 0
     root.selectedIndex = 0
+    root.openedArticle = null
   }
 
   onUnreadOnlyChanged: {
     root.currentPage = 0
     root.selectedIndex = 0
+    root.openedArticle = null
   }
 
   onSearchQueryChanged: {
     root.currentPage = 0
     root.selectedIndex = 0
+    root.openedArticle = null
   }
 
   // 1. Header Bar (anchored top)
@@ -512,6 +552,7 @@ Item {
           contentFontFamily: root.contentFontFamily
 
           onActivated: root.activateItem(modelData)
+          onOpenExternal: root.openExternalItem(modelData)
           onToggleRead: root.toggleReadItem(modelData)
         }
       }
@@ -626,5 +667,28 @@ Item {
         }
       }
     }
+  }
+
+  ArticleDetailView {
+    id: articleDetailView
+    anchors.fill: parent
+    visible: root.articleOpen
+    z: 2000
+    item: root.openedArticle || ({})
+    fullText: root.openedArticle ? (root.articleContentMap[Model.itemIdentity(root.openedArticle)] || "") : ""
+    isFetchingFull: root.openedArticle && root.articleFetchIdentity === Model.itemIdentity(root.openedArticle) && root.articleFetchStatus === "loading"
+    fetchStatus: root.openedArticle && root.articleFetchIdentity === Model.itemIdentity(root.openedArticle) ? root.articleFetchStatus : ""
+    readerFontSize: root.readerFontSize
+    readerLineHeight: root.readerLineHeight
+    zenMode: root.articleZenMode
+    isRead: Model.isRead(root.readSet, root.openedArticle)
+    contentForeground: root.contentForeground
+    contentFontFamily: root.contentFontFamily
+    onBackRequested: root.closeArticle()
+    onOpenExternalRequested: root.openExternalItem(root.openedArticle)
+    onFetchFullRequested: root.fetchFullArticle(root.openedArticle)
+    onZenModeChanged: root.articleZenMode = zenMode
+    onReaderPreferencesChanged: function(fontSize, lineHeight) { root.updateReaderPreferences(fontSize, lineHeight) }
+    onToggleReadRequested: root.toggleReadItem(root.openedArticle)
   }
 }

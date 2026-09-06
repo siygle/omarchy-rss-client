@@ -90,6 +90,7 @@ test("malicious OPML metadata is preserved literally by parser and not converted
 
 test("all QML text rendering components with dynamic/untrusted data explicitly declare Text.PlainText", () => {
   const qmlFiles = [
+    "ArticleDetailView.qml",
     "ArticleRow.qml",
     "CategoryDrawer.qml",
     "ReaderView.qml",
@@ -99,6 +100,7 @@ test("all QML text rendering components with dynamic/untrusted data explicitly d
   ];
 
   const dynamicBindings = [
+    /text\s*:\s*root\.articleText/,
     /text\s*:\s*root\.item\./,
     /text\s*:\s*modelData\./,
     /text\s*:\s*root\.currentCategory/,

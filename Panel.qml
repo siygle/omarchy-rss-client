@@ -25,6 +25,11 @@ Panel {
   property int itemsPerPage: 10
   property int retentionDays: 30
   property bool unreadOnlyDefault: false
+  property int readerFontSize: 16
+  property real readerLineHeight: 1.3
+  property var articleContentMap: ({})
+  property string articleFetchIdentity: ""
+  property string articleFetchStatus: ""
   property string barSection: "right"
   property var lastImportResult: null
   property string shareStatus: ""
@@ -71,6 +76,11 @@ Panel {
       root.itemsPerPage = root.hostWidget.configuredItemsPerPage
       root.retentionDays = root.hostWidget.configuredRetentionDays
       root.unreadOnlyDefault = root.hostWidget.configuredUnreadOnlyDefault
+      root.readerFontSize = root.hostWidget.configuredReaderFontSize
+      root.readerLineHeight = root.hostWidget.configuredReaderLineHeight
+      root.articleContentMap = root.hostWidget.articleContentMap
+      root.articleFetchIdentity = root.hostWidget.articleFetchIdentity
+      root.articleFetchStatus = root.hostWidget.articleFetchStatus
       root.barSection = root.hostWidget.configuredBarSection
       root.lastImportResult = null
       root.shareStatus = ""
@@ -135,8 +145,12 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(460))
-    contentHeight: panel.fittedContentHeight(Style.space(520))
+    contentWidth: readerView.articleOpen && readerView.articleZenMode
+      ? panel.fittedContentWidth(panel.availableCardWidth)
+      : panel.fittedContentWidth(Style.space(460))
+    contentHeight: readerView.articleOpen && readerView.articleZenMode
+      ? panel.cappedContentHeight(panel.availableCardHeight)
+      : panel.fittedContentHeight(Style.space(520))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -146,6 +160,8 @@ Panel {
           root.currentView = root.subscriptionsReturnView
         } else if (root.currentView === "settings") {
           root.currentView = "reader"
+        } else if (readerView.articleOpen) {
+          readerView.closeArticle()
         } else if (readerView.drawerOpen) {
           readerView.drawerOpen = false
         } else {
@@ -166,6 +182,13 @@ Panel {
         }
 
         if (root.currentView === "reader") {
+          if (readerView.articleOpen) {
+            if (event.key === Qt.Key_O) {
+              readerView.openExternalItem(readerView.openedArticle)
+              event.accepted = true
+            }
+            return
+          }
           if (event.key === Qt.Key_J || event.key === Qt.Key_Down) {
             readerView.selectNextArticle()
             event.accepted = true
@@ -217,6 +240,11 @@ Panel {
           contentFontFamily: root.contentFontFamily
           itemsPerPage: root.itemsPerPage
           unreadOnlyDefault: root.unreadOnlyDefault
+          readerFontSize: root.readerFontSize
+          readerLineHeight: root.readerLineHeight
+          articleContentMap: root.articleContentMap
+          articleFetchIdentity: root.articleFetchIdentity
+          articleFetchStatus: root.articleFetchStatus
           isFetching: root.isFetching
           totalFeeds: root.totalFeeds
           completedFeeds: root.completedFeeds

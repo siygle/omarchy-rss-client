@@ -1502,6 +1502,49 @@ function recentList(items, n) {
   return copy.slice(0, size)
 }
 
+function extractReadableText(html) {
+  var source = String(html || "")
+  if (!source) return ""
+  source = source
+    .replace(/<script\b[\s\S]*?<\/script\s*>/gi, " ")
+    .replace(/<style\b[\s\S]*?<\/style\s*>/gi, " ")
+    .replace(/<noscript\b[\s\S]*?<\/noscript\s*>/gi, " ")
+    .replace(/<svg\b[\s\S]*?<\/svg\s*>/gi, " ")
+    .replace(/<nav\b[\s\S]*?<\/nav\s*>/gi, " ")
+    .replace(/<footer\b[\s\S]*?<\/footer\s*>/gi, " ")
+    .replace(/<aside\b[\s\S]*?<\/aside\s*>/gi, " ")
+
+  var candidates = []
+  var patterns = [
+    /<article\b[^>]*>([\s\S]*?)<\/article\s*>/gi,
+    /<main\b[^>]*>([\s\S]*?)<\/main\s*>/gi,
+    /<div\b[^>]*(?:class|id)=["'][^"']*(?:post|article|content|entry)[^"']*["'][^>]*>([\s\S]*?)<\/div\s*>/gi,
+    /<body\b[^>]*>([\s\S]*?)<\/body\s*>/gi
+  ]
+  for (var p = 0; p < patterns.length; p++) {
+    var match
+    while ((match = patterns[p].exec(source)) !== null) {
+      var text = stripHtml(match[1])
+      if (text.length > 120) candidates.push(text)
+    }
+  }
+  if (candidates.length === 0) return stripHtml(source)
+  candidates.sort(function(a, b) { return b.length - a.length })
+  return candidates[0]
+}
+
+function readerFontSize(value) {
+  var n = Number(value)
+  if (!isFinite(n)) return 16
+  return Math.max(12, Math.min(24, Math.round(n)))
+}
+
+function readerLineHeight(value) {
+  var n = Number(value)
+  if (!isFinite(n)) return 1.3
+  return Math.max(1.0, Math.min(2.0, Math.round(n * 10) / 10))
+}
+
 function rowText(item) {
   if (!item) return ""
   if (item.title) return item.title
@@ -1602,6 +1645,9 @@ if (typeof module !== "undefined" && module.exports) {
     MAX_RETENTION_DAYS: MAX_RETENTION_DAYS,
     normalizeRetentionDays: normalizeRetentionDays,
     pruneArticlesByRetention: pruneArticlesByRetention,
+    extractReadableText: extractReadableText,
+    readerFontSize: readerFontSize,
+    readerLineHeight: readerLineHeight,
     relativeTime: relativeTime,
     stripHtml: stripHtml
   }

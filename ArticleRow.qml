@@ -14,6 +14,7 @@ Item {
   property string contentFontFamily: Style.font.family
 
   signal activated()
+  signal openExternal()
   signal toggleRead()
 
   height: Style.space(42)
@@ -113,7 +114,7 @@ Item {
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        onClicked: root.activated()
+        onClicked: root.openExternal()
       }
     }
   }
