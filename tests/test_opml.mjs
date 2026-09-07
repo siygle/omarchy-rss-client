@@ -54,6 +54,56 @@ test("parseOpmlDetails returns structured feed counts and HTTPS feeds", () => {
   ]);
 });
 
+test("feed URL validation rejects userinfo and secret-bearing query params", () => {
+  assert.equal(Model.isHttpsUrl("https://example.com/feed.xml?category=tech&limit=10"), true);
+  assert.equal(Model.isHttpsUrl("https://user:pass@example.com/feed.xml"), false);
+  assert.equal(Model.isHttpsUrl("https://example.com/feed.xml?token=secret"), false);
+  assert.equal(Model.isHttpsUrl("https://example.com/feed.xml?access_token=secret"), false);
+  assert.equal(Model.isHttpsUrl("https://example.com/feed.xml?api_key=secret"), false);
+  assert.equal(Model.isHttpsUrl("https://example.com/feed.xml?password=secret"), false);
+  assert.equal(Model.isHttpsUrl("https://example.com/feed.xml#access_token=secret"), false);
+});
+
+test("OPML import rejects private feed URLs before they can be persisted or fetched", () => {
+  const opml = `<opml version="2.0">
+  <body>
+    <outline text="Public" xmlUrl="https://example.com/feed.xml?category=tech"/>
+    <outline text="Userinfo" xmlUrl="https://user:pass@example.com/feed.xml"/>
+    <outline text="Token" xmlUrl="https://example.com/feed.xml?token=secret"/>
+    <outline text="Api Key" xmlUrl="https://example.com/feed.xml?api_key=secret"/>
+  </body>
+</opml>`;
+
+  const details = Model.parseOpmlDetails(opml);
+  assert.equal(details.totalFound, 4);
+  assert.equal(details.invalidCount, 3);
+  assert.deepEqual(details.feeds, ["https://example.com/feed.xml?category=tech"]);
+  assert.equal(JSON.stringify(details).includes("secret"), false);
+  assert.equal(JSON.stringify(details).includes("user:pass"), false);
+});
+
+test("editor and share imports reject userinfo and token-query URLs", () => {
+  const addUserinfo = Model.addSubscription([], "https://reader:secret@example.com/rss", "", "");
+  assert.equal(addUserinfo.ok, false);
+
+  const addToken = Model.addSubscription([], "https://example.com/rss?token=secret", "", "");
+  assert.equal(addToken.ok, false);
+
+  const shared = Model.parseSharePayload([
+    "https://ok.example/rss?category=tech",
+    "https://reader:secret@example.com/rss",
+    "https://bad.example/rss?access_token=secret"
+  ].join("\n"));
+  assert.deepEqual(shared, ["https://ok.example/rss?category=tech"]);
+});
+
+test("BarWidget does not pass OPML export content through argv or log imported URLs", () => {
+  const qml = fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), "..", "BarWidget.qml"), "utf8");
+  assert.equal(qml.includes("content = sys.argv[2]"), false);
+  assert.equal(qml.includes("opmlContent\n    ]"), false);
+  assert.equal(qml.includes("JSON.stringify(result)"), false);
+});
+
 test("calculateImportResult generates expected report and messages", () => {
   const current = ["https://dup.example/rss"];
   const details = {

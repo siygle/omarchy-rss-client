@@ -275,7 +275,7 @@ BarWidget {
   }
 
   function requestOpmlFileExport() {
-    if (opmlExportSelectProcess.running || opmlWriteProcess.running) return
+    if (opmlExportSelectProcess.running) return
     root.selectedExportPath = ""
     var defaultName = defaultExportFilename()
     console.log("[RSS-CLIENT] requestOpmlFileExport entered, defaultName:", defaultName)
@@ -334,19 +334,17 @@ BarWidget {
     }
     console.log("[RSS-CLIENT] handleSelectedExportFile target path:", resolvedPath)
     var opmlContent = Model.generateOpml(root.configuredSubscriptions)
-    opmlWriteProcess.targetPath = resolvedPath
-    opmlWriteProcess.exportedCount = root.configuredSubscriptions.length
-    opmlWriteProcess.command = [
-      "python3", "-c",
-      "import sys\n" +
-      "path = sys.argv[1]\n" +
-      "content = sys.argv[2]\n" +
-      "with open(path, 'w', encoding='utf-8') as f:\n" +
-      "    f.write(content)\n",
-      resolvedPath,
-      opmlContent
-    ]
-    opmlWriteProcess.running = true
+    opmlExportFile.path = resolvedPath
+    opmlExportFile.setText(opmlContent + "\n")
+    var filename = Model.filenameFromPath(resolvedPath)
+    var msg = "Saved " + filename + " (" + root.configuredSubscriptions.length + " feeds)"
+    root.lastImportMessage = msg
+    root.lastImportResult = { status: "success", message: msg, exported: root.configuredSubscriptions.length }
+    if (panelLoader.item) {
+      panelLoader.item.shareStatus = root.lastImportMessage
+      panelLoader.item.lastImportResult = root.lastImportResult
+    }
+    injectPanel()
   }
 
   function updateSubscriptions(subs) {
@@ -844,7 +842,7 @@ BarWidget {
         parseDetails = { feeds: parsed, subscriptions: Model.normalizeSubscriptions([], parsed), categories: [], invalidCount: 0, totalFound: parsed.length }
       }
       var result = Model.calculateImportResult(root.configuredSubscriptions, parseDetails, filename)
-      console.log("[RSS-D696463-LIVE] parsed count: " + parseDetails.feeds.length + ", result: " + JSON.stringify(result))
+      console.log("[RSS-D696463-LIVE] parsed count: " + parseDetails.feeds.length + ", imported: " + result.imported + ", duplicates: " + result.duplicates + ", invalid: " + result.invalid)
       root.lastImportResult = result
       root.lastImportMessage = result.message
       if (result.status === "success" && (result.imported > 0 || result.duplicates > 0)) {
@@ -883,30 +881,11 @@ BarWidget {
     }
   }
 
-  Process {
-    id: opmlWriteProcess
-    property string targetPath: ""
-    property int exportedCount: 0
-    stdout: StdioCollector { id: opmlWriteStdout; waitForEnd: true }
-    stderr: StdioCollector { id: opmlWriteStderr; waitForEnd: true }
-    onExited: function(exitCode) {
-      console.log("[RSS-CLIENT] opmlWriteProcess exited with code:", exitCode)
-      if (exitCode !== 0) {
-        var err = String(opmlWriteStderr.text || "").trim() || "Failed to write file"
-        root.lastImportMessage = "Export failed: " + err
-        root.lastImportResult = { status: "error", message: root.lastImportMessage }
-      } else {
-        var filename = Model.filenameFromPath(opmlWriteProcess.targetPath)
-        var msg = "Saved " + filename + " (" + opmlWriteProcess.exportedCount + " feeds)"
-        root.lastImportMessage = msg
-        root.lastImportResult = { status: "success", message: msg, exported: opmlWriteProcess.exportedCount }
-      }
-      if (panelLoader.item) {
-        panelLoader.item.shareStatus = root.lastImportMessage
-        panelLoader.item.lastImportResult = root.lastImportResult
-      }
-      injectPanel()
-    }
+  FileView {
+    id: opmlExportFile
+    watchChanges: false
+    atomicWrites: true
+    printErrors: true
   }
 
   Loader {

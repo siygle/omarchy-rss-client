@@ -62,11 +62,60 @@ function maxFeedBytes() {
   return 2097152
 }
 
+function secretQueryParamNames() {
+  return {
+    access_token: true,
+    auth: true,
+    auth_token: true,
+    apikey: true,
+    api_key: true,
+    key: true,
+    password: true,
+    passwd: true,
+    pwd: true,
+    secret: true,
+    sig: true,
+    signature: true,
+    token: true
+  }
+}
+
+function isSecretQueryParamName(name) {
+  var raw = String(name || "").trim().toLowerCase()
+  if (!raw) return false
+  raw = raw.replace(/[\[\]-]/g, "_")
+  var names = secretQueryParamNames()
+  if (names[raw]) return true
+  return /(^|_)token($|_)/.test(raw) || /(^|_)secret($|_)/.test(raw) || /(^|_)password($|_)/.test(raw)
+}
+
+function hasSecretQueryParams(query) {
+  var q = String(query || "")
+  if (!q) return false
+  var parts = q.split(/[&;]/)
+  for (var i = 0; i < parts.length; i++) {
+    var key = parts[i].split("=")[0]
+    try { key = decodeURIComponent(key.replace(/\+/g, " ")) } catch (e) {}
+    if (isSecretQueryParamName(key)) return true
+  }
+  return false
+}
+
 function isHttpsUrl(url) {
   var value = String(url || "").trim()
   if (!value) return false
   if (/\s/.test(value)) return false
-  return /^https:\/\/[^\/?#\s]+/i.test(value)
+  var m = /^https:\/\/([^\/?#]+)([^#]*)?(#.*)?$/i.exec(value)
+  if (!m || !m[1]) return false
+  var authority = m[1]
+  if (authority.indexOf("@") !== -1) return false
+  if (!/[A-Za-z0-9]/.test(authority)) return false
+  var rest = m[2] || ""
+  var qIndex = rest.indexOf("?")
+  if (qIndex !== -1 && hasSecretQueryParams(rest.slice(qIndex + 1))) return false
+  var fragment = m[3] ? String(m[3]).slice(1) : ""
+  if (fragment && hasSecretQueryParams(fragment)) return false
+  return true
 }
 
 function httpsFeedUrls(value) {
@@ -278,9 +327,9 @@ function extractDomainTitle(url) {
   var str = String(url || "").trim()
   if (!str) return ""
   try {
-    var match = /^https?:\/\/([^\/?#]+)/i.exec(str)
-    if (match && match[1]) {
-      return match[1].replace(/^www\./i, "")
+    var match = /^https?:\/\/([^\/?#@]+@)?([^\/?#]+)/i.exec(str)
+    if (match && match[2]) {
+      return match[2].replace(/^www\./i, "")
     }
   } catch (e) {}
   return str
@@ -1584,6 +1633,8 @@ if (typeof module !== "undefined" && module.exports) {
     feedUrls: feedUrls,
     httpsFeedUrls: httpsFeedUrls,
     isHttpsUrl: isHttpsUrl,
+    hasSecretQueryParams: hasSecretQueryParams,
+    isSecretQueryParamName: isSecretQueryParamName,
     maxFeedBytes: maxFeedBytes,
     splitFetchedBody: splitFetchedBody,
     isFeedTextResponse: isFeedTextResponse,
