@@ -91,7 +91,6 @@ Item {
   }
 
   function saveFeed() {
-    console.log("[RSS-CLIENT] saveFeed entered with draftUrl:", root.draftUrl, "editing:", root.editingUrl)
     var catToSave = root.isCustomCategoryMode ? root.customCategoryText : (root.selectedCategory || root.draftCategory)
     var res = root.isEditing
       ? Model.updateSubscription(root.subscriptions, root.editingUrl, root.draftUrl, root.draftTitle, catToSave)

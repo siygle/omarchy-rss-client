@@ -62,6 +62,11 @@ test("feed URL validation rejects userinfo and secret-bearing query params", () 
   assert.equal(Model.isHttpsUrl("https://example.com/feed.xml?api_key=secret"), false);
   assert.equal(Model.isHttpsUrl("https://example.com/feed.xml?password=secret"), false);
   assert.equal(Model.isHttpsUrl("https://example.com/feed.xml#access_token=secret"), false);
+  assert.equal(Model.isHttpsUrl("https://example.com/feed.xml?X-Amz-Signature=abc"), false);
+  assert.equal(Model.isHttpsUrl("https://example.com/feed.xml?sig=abc"), false);
+  assert.equal(Model.isHttpsUrl("https://example.com/feed.xml?x-amz-security-token=abc"), false);
+  assert.equal(Model.isHttpsUrl("https://example.com/feed.xml?X-Goog-Signature=abc"), false);
+  assert.equal(Model.isHttpsUrl("https://example.com/feed.xml?Signature=abc"), false);
 });
 
 test("OPML import rejects private feed URLs before they can be persisted or fetched", () => {

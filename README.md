@@ -2,7 +2,9 @@
 
 A fork of [`sanjyay/rss-reeder`](https://github.com/sanjyay/rss-reeder) for Omarchy.
 
-All original RSS reader implementation credit goes to the upstream project and its author. This fork keeps the MIT license and preserves upstream attribution.
+**Attribution chain:** [`rafaelvzago/omarchy-rss-plugin`](https://github.com/rafaelvzago/omarchy-rss-plugin) → [`sanjyay/rss-reeder`](https://github.com/sanjyay/rss-reeder) → this repo. MIT license continues from the original author (Rafael Vzago); this fork preserves upstream attribution.
+
+**Supported feeds:** public HTTPS feed URLs only. Do not add private feeds that embed tokens in the path (for example `/feed/<token>.xml`); those cannot be detected and rejected the way userinfo or secret query parameters are.
 
 ## Features added in this fork
 
@@ -50,6 +52,16 @@ removes the unused per-feed enable/disable circle and keeps edit/delete actions 
 ## Bugfix & improvement
 
 - **Category dropdown hit-testing fix**: improves category selection behavior so the dropdown/overlay handles pointer interaction correctly.
+
+## Requirements
+
+Runtime dependencies (typically already present on Omarchy / Arch):
+
+- `curl` — feed and article fetching
+- `python3` (`python` package) — OPML import validation and export file chooser helper
+- `python-gobject` — PyGObject (`gi` / Gio / GLib) for the XDG FileChooser portal save dialog
+- `xdg-desktop-portal` — desktop portal backend used by the save dialog
+- `omarchy-file-select` — OPML import file picker (provided by Omarchy)
 
 ## Install
 

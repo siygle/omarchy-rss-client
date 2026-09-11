@@ -83,10 +83,14 @@ function secretQueryParamNames() {
 function isSecretQueryParamName(name) {
   var raw = String(name || "").trim().toLowerCase()
   if (!raw) return false
-  raw = raw.replace(/[\[\]-]/g, "_")
+  raw = raw.replace(/[\[\]\-\.]/g, "_")
   var names = secretQueryParamNames()
   if (names[raw]) return true
-  return /(^|_)token($|_)/.test(raw) || /(^|_)secret($|_)/.test(raw) || /(^|_)password($|_)/.test(raw)
+  if (/^x_amz_/.test(raw) || /^x_goog_/.test(raw)) return true
+  return /(^|_)token($|_)/.test(raw)
+    || /(^|_)secret($|_)/.test(raw)
+    || /(^|_)password($|_)/.test(raw)
+    || /(^|_)(sig|signature)($|_)/.test(raw)
 }
 
 function hasSecretQueryParams(query) {
@@ -321,6 +325,20 @@ function filenameFromPath(filePath) {
   var raw = String(filePath || "").trim()
   if (!raw) return ""
   return raw.replace(/^.*[\\\/]/, "")
+}
+
+function redactForLog(value) {
+  var s = String(value == null ? "" : value)
+  if (!s) return ""
+  // Strip URI userinfo and query/fragment that may carry secrets.
+  s = s.replace(/([a-z][a-z0-9+.-]*:\/\/)([^\/?#\s]+)@/gi, "$1[REDACTED]@")
+  s = s.replace(/([?&#][^=&#\s]*)=([^&#\s]*)/g, function(match, key, _val) {
+    var name = String(key || "").replace(/^[?&#]/, "")
+    try { name = decodeURIComponent(name.replace(/\+/g, " ")) } catch (e) {}
+    if (isSecretQueryParamName(name)) return key + "=[REDACTED]"
+    return match
+  })
+  return s
 }
 
 function extractDomainTitle(url) {
@@ -1648,6 +1666,7 @@ if (typeof module !== "undefined" && module.exports) {
     sharePayload: sharePayload,
     filePathFromUrl: filePathFromUrl,
     filenameFromPath: filenameFromPath,
+    redactForLog: redactForLog,
     parseOpmlDetails: parseOpmlDetails,
     parseOpmlStructured: parseOpmlStructured,
     parseOpml: parseOpml,
