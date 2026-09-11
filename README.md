@@ -2,7 +2,7 @@
 
 A fork of [`sanjyay/rss-reeder`](https://github.com/sanjyay/rss-reeder) for Omarchy.
 
-All original RSS reader implementation credit goes to the upstream project and its author. This fork keeps the MIT license and preserves upstream attribution.
+**Attribution chain:** [`rafaelvzago/omarchy-rss-plugin`](https://github.com/rafaelvzago/omarchy-rss-plugin) → [`sanjyay/rss-reeder`](https://github.com/sanjyay/rss-reeder) → this repo. MIT license continues from the original author (Rafael Vzago); this fork preserves upstream attribution.
 
 **Supported feeds:** public HTTPS feed URLs only. Do not add private feeds that embed tokens in the path (for example `/feed/<token>.xml`); those cannot be detected and rejected the way userinfo or secret query parameters are.
 
