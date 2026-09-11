@@ -53,6 +53,16 @@ removes the unused per-feed enable/disable circle and keeps edit/delete actions 
 
 - **Category dropdown hit-testing fix**: improves category selection behavior so the dropdown/overlay handles pointer interaction correctly.
 
+## Requirements
+
+Runtime dependencies (typically already present on Omarchy / Arch):
+
+- `curl` — feed and article fetching
+- `python3` (`python` package) — OPML import validation and export file chooser helper
+- `python-gobject` — PyGObject (`gi` / Gio / GLib) for the XDG FileChooser portal save dialog
+- `xdg-desktop-portal` — desktop portal backend used by the save dialog
+- `omarchy-file-select` — OPML import file picker (provided by Omarchy)
+
 ## Install
 
 ```bash
