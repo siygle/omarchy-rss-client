@@ -83,10 +83,14 @@ function secretQueryParamNames() {
 function isSecretQueryParamName(name) {
   var raw = String(name || "").trim().toLowerCase()
   if (!raw) return false
-  raw = raw.replace(/[\[\]-]/g, "_")
+  raw = raw.replace(/[\[\]\-\.]/g, "_")
   var names = secretQueryParamNames()
   if (names[raw]) return true
-  return /(^|_)token($|_)/.test(raw) || /(^|_)secret($|_)/.test(raw) || /(^|_)password($|_)/.test(raw)
+  if (/^x_amz_/.test(raw) || /^x_goog_/.test(raw)) return true
+  return /(^|_)token($|_)/.test(raw)
+    || /(^|_)secret($|_)/.test(raw)
+    || /(^|_)password($|_)/.test(raw)
+    || /(^|_)(sig|signature)($|_)/.test(raw)
 }
 
 function hasSecretQueryParams(query) {

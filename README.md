@@ -4,6 +4,8 @@ A fork of [`sanjyay/rss-reeder`](https://github.com/sanjyay/rss-reeder) for Omar
 
 All original RSS reader implementation credit goes to the upstream project and its author. This fork keeps the MIT license and preserves upstream attribution.
 
+**Supported feeds:** public HTTPS feed URLs only. Do not add private feeds that embed tokens in the path (for example `/feed/<token>.xml`); those cannot be detected and rejected the way userinfo or secret query parameters are.
+
 ## Features added in this fork
 
 ### Quick add feed
