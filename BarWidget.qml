@@ -183,9 +183,6 @@ BarWidget {
   function requestOpmlFileImport() {
     if (opmlSelectProcess.running || opmlValidateAndReadProcess.running) return
     root.selectedOpmlPath = ""
-    console.log("[RSS-D696463-LIVE] requestOpmlFileImport entered")
-    console.log("[RSS-D696463-LIVE] command passed to omarchy-file-select:", JSON.stringify(opmlSelectProcess.command))
-    console.log("[RSS-D696463-LIVE] process started: opmlSelectProcess")
     opmlSelectProcess.running = true
   }
 
@@ -196,10 +193,8 @@ BarWidget {
   function handleSelectedOpmlFile(fileUrlOrPath) {
     var raw = String(fileUrlOrPath || "").trim()
     if (!raw) return
-    console.log("[RSS-D696463-LIVE] handleSelectedOpmlFile entered with raw path/url:", JSON.stringify(raw))
     var resolvedPath = Model.filePathFromUrl(raw)
     if (!resolvedPath) return
-    console.log("[RSS-D696463-LIVE] normalized selected path:", resolvedPath)
     root.selectedOpmlPath = resolvedPath
     opmlValidateAndReadProcess.sourcePath = resolvedPath
     opmlValidateAndReadProcess.command = [
@@ -223,7 +218,6 @@ BarWidget {
       "    sys.stdout.buffer.write(f.read())\n",
       resolvedPath
     ]
-    console.log("[RSS-D696463-LIVE] validation reader started for:", resolvedPath)
     opmlValidateAndReadProcess.running = true
   }
 
@@ -332,7 +326,7 @@ BarWidget {
     if (!/\.opml$/i.test(resolvedPath) && !/\.xml$/i.test(resolvedPath)) {
       resolvedPath += ".opml"
     }
-    console.log("[RSS-CLIENT] handleSelectedExportFile target path:", resolvedPath)
+    console.log("[RSS-CLIENT] handleSelectedExportFile target:", Model.redactForLog(Model.filenameFromPath(resolvedPath)))
     var opmlContent = Model.generateOpml(root.configuredSubscriptions)
     opmlExportFile.path = resolvedPath
     opmlExportFile.setText(opmlContent + "\n")
@@ -790,14 +784,11 @@ BarWidget {
       id: opmlSelectStdout
       waitForEnd: true
       onStreamFinished: {
-        console.log("[RSS-D696463-LIVE] raw stdout: " + JSON.stringify(opmlSelectStdout.text))
         var path = String(opmlSelectStdout.text || "").trim()
         if (path) root.selectedOpmlPath = path
       }
     }
     onExited: function(exitCode) {
-      console.log("[RSS-D696463-LIVE] process exited: opmlSelectProcess, exit code: " + exitCode)
-      console.log("[RSS-D696463-LIVE] raw selected path: " + JSON.stringify(root.selectedOpmlPath))
       if (exitCode === 0 && root.selectedOpmlPath) {
         root.handleSelectedOpmlFile(root.selectedOpmlPath)
       }
@@ -816,7 +807,6 @@ BarWidget {
       waitForEnd: true
     }
     onExited: function(exitCode) {
-      console.log("[RSS-D696463-LIVE] validation reader exit code: " + exitCode)
       if (exitCode !== 0) {
         var err = String(opmlStderr.text || "").trim() || "Failed to read file"
         root.lastImportResult = {
@@ -834,7 +824,6 @@ BarWidget {
         return
       }
       var content = String(opmlStdout.text || "")
-      console.log("[RSS-D696463-LIVE] parser entered with payload length: " + content.length)
       var filename = Model.filenameFromPath(opmlValidateAndReadProcess.sourcePath)
       var parseDetails = Model.parseOpmlDetails(content)
       if (!parseDetails.feeds.length) {
@@ -842,7 +831,7 @@ BarWidget {
         parseDetails = { feeds: parsed, subscriptions: Model.normalizeSubscriptions([], parsed), categories: [], invalidCount: 0, totalFound: parsed.length }
       }
       var result = Model.calculateImportResult(root.configuredSubscriptions, parseDetails, filename)
-      console.log("[RSS-D696463-LIVE] parsed count: " + parseDetails.feeds.length + ", imported: " + result.imported + ", duplicates: " + result.duplicates + ", invalid: " + result.invalid)
+      console.log("[omarchy-rss-client] parsed count: " + parseDetails.feeds.length + ", imported: " + result.imported + ", duplicates: " + result.duplicates + ", invalid: " + result.invalid)
       root.lastImportResult = result
       root.lastImportMessage = result.message
       if (result.status === "success" && (result.imported > 0 || result.duplicates > 0)) {
@@ -851,7 +840,7 @@ BarWidget {
           feedUrls: Model.serializeFeedUrls(result.newFeeds)
         })
         fetchFeed()
-        console.log("[RSS-D696463-LIVE] persisted feed count: " + result.newFeeds.length)
+        console.log("[omarchy-rss-client] persisted feed count: " + result.newFeeds.length)
       }
       if (panelLoader.item) {
         panelLoader.item.subscriptions = root.configuredSubscriptions
@@ -874,7 +863,7 @@ BarWidget {
       }
     }
     onExited: function(exitCode) {
-      console.log("[RSS-CLIENT] opmlExportSelectProcess exited with code:", exitCode, "path:", root.selectedExportPath)
+      console.log("[RSS-CLIENT] opmlExportSelectProcess exited with code:", exitCode, "file:", Model.redactForLog(Model.filenameFromPath(root.selectedExportPath)))
       if (exitCode === 0 && root.selectedExportPath) {
         root.handleSelectedExportFile(root.selectedExportPath)
       }

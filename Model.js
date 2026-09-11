@@ -323,6 +323,20 @@ function filenameFromPath(filePath) {
   return raw.replace(/^.*[\\\/]/, "")
 }
 
+function redactForLog(value) {
+  var s = String(value == null ? "" : value)
+  if (!s) return ""
+  // Strip URI userinfo and query/fragment that may carry secrets.
+  s = s.replace(/([a-z][a-z0-9+.-]*:\/\/)([^\/?#\s]+)@/gi, "$1[REDACTED]@")
+  s = s.replace(/([?&#][^=&#\s]*)=([^&#\s]*)/g, function(match, key, _val) {
+    var name = String(key || "").replace(/^[?&#]/, "")
+    try { name = decodeURIComponent(name.replace(/\+/g, " ")) } catch (e) {}
+    if (isSecretQueryParamName(name)) return key + "=[REDACTED]"
+    return match
+  })
+  return s
+}
+
 function extractDomainTitle(url) {
   var str = String(url || "").trim()
   if (!str) return ""
@@ -1648,6 +1662,7 @@ if (typeof module !== "undefined" && module.exports) {
     sharePayload: sharePayload,
     filePathFromUrl: filePathFromUrl,
     filenameFromPath: filenameFromPath,
+    redactForLog: redactForLog,
     parseOpmlDetails: parseOpmlDetails,
     parseOpmlStructured: parseOpmlStructured,
     parseOpml: parseOpml,
