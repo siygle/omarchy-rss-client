@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "author": "siygle",
   "license": "MIT",
-  "description": "Native RSS and Atom reader for the Omarchy bar with OPML, categories, search, unread tracking, and configurable retention.",
+	"description": "Built on sanjyay/rss-reeder, adding more RSS client features and bug fixes.",
   "kinds": ["bar-widget"],
   "entryPoints": {
     "barWidget": "BarWidget.qml"
