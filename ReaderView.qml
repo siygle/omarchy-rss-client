@@ -37,6 +37,7 @@ Item {
   property bool articleZenMode: false
   property bool markAllReadConfirming: false
   readonly property bool articleOpen: root.openedArticle !== null
+  property alias articleView: articleDetailView
 
   signal openSettingsRequested()
   signal addFeedRequested()
@@ -243,6 +244,11 @@ Item {
           cursorShape: Qt.PointingHandCursor
           onClicked: root.addFeedRequested()
         }
+
+        PanelToolTip {
+          visible: addFeedHover.containsMouse
+          text: "Add feed"
+        }
       }
 
       // Refresh action
@@ -267,6 +273,11 @@ Item {
           hoverEnabled: true
           cursorShape: Qt.PointingHandCursor
           onClicked: root.refreshRequested()
+        }
+
+        PanelToolTip {
+          visible: refreshHover.containsMouse
+          text: root.isFetching ? "Refreshing feeds…" : "Refresh feeds (R)"
         }
       }
 
@@ -297,6 +308,11 @@ Item {
           cursorShape: Qt.PointingHandCursor
           onClicked: root.markAllRead()
         }
+
+        PanelToolTip {
+          visible: markReadHover.containsMouse
+          text: root.markAllReadConfirming ? "Click again to mark all as read" : "Mark all as read (A)"
+        }
       }
 
       // Settings action
@@ -320,6 +336,11 @@ Item {
           hoverEnabled: true
           cursorShape: Qt.PointingHandCursor
           onClicked: root.openSettingsRequested()
+        }
+
+        PanelToolTip {
+          visible: settingsHover.containsMouse
+          text: "Settings"
         }
       }
     }
@@ -366,6 +387,11 @@ Item {
           hoverEnabled: true
           cursorShape: Qt.PointingHandCursor
           onClicked: root.toggleCategoryDrawer()
+        }
+
+        PanelToolTip {
+          visible: drawerHover.containsMouse
+          text: root.drawerOpen ? "Hide categories (C)" : "Show categories (C)"
         }
       }
 
@@ -415,6 +441,11 @@ Item {
             }
           }
         }
+
+        PanelToolTip {
+          visible: scopeHover.containsMouse && text !== ""
+          text: scopeBtn.isCustomCat ? "Show all feeds" : (root.hasCategories ? "Choose a category" : "")
+        }
       }
 
       // Unread-Only Toggle Chip
@@ -462,6 +493,11 @@ Item {
           hoverEnabled: true
           cursorShape: Qt.PointingHandCursor
           onClicked: root.unreadOnly = !root.unreadOnly
+        }
+
+        PanelToolTip {
+          visible: unreadHover.containsMouse
+          text: root.unreadOnly ? "Show all articles" : "Show unread only"
         }
       }
     }
@@ -649,6 +685,11 @@ Item {
             }
           }
         }
+
+        PanelToolTip {
+          visible: prevMouse.containsMouse && text !== ""
+          text: root.currentPage > 0 ? "Previous page" : ""
+        }
       }
 
       Text {
@@ -687,6 +728,11 @@ Item {
               root.selectedIndex = 0
             }
           }
+        }
+
+        PanelToolTip {
+          visible: nextMouse.containsMouse && text !== ""
+          text: root.currentPage < root.totalPages - 1 ? "Next page" : ""
         }
       }
     }

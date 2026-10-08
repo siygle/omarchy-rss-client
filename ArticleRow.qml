@@ -93,6 +93,11 @@ Item {
         cursorShape: Qt.PointingHandCursor
         onClicked: root.toggleRead()
       }
+
+      PanelToolTip {
+        visible: markHover.containsMouse && text !== ""
+        text: root.isRead ? "Mark as unread" : "Mark as read"
+      }
     }
 
     // Open in browser button
@@ -116,6 +121,11 @@ Item {
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onClicked: root.openExternal()
+      }
+
+      PanelToolTip {
+        visible: linkHover.containsMouse
+        text: "Open in browser"
       }
     }
   }
