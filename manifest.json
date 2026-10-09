@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.siygle.omarchy-rss-client",
   "name": "Omarchy RSS Client",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "author": "siygle",
   "license": "MIT",
 	"description": "Built on sanjyay/rss-reeder, adding more RSS client features and bug fixes.",
