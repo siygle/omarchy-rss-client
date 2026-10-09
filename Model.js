@@ -1612,6 +1612,17 @@ function readerLineHeight(value) {
   return Math.max(1.0, Math.min(2.0, Math.round(n * 10) / 10))
 }
 
+// Rough reading-time estimate: ~230 words/min for space-separated scripts,
+// ~500 chars/min for CJK text where words are not space-delimited.
+function readingMinutes(text) {
+  var str = String(text || "")
+  var cjkPattern = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af]/g
+  var cjk = (str.match(cjkPattern) || []).length
+  var words = (str.replace(cjkPattern, " ").match(/\S+/g) || []).length
+  if (cjk === 0 && words === 0) return 0
+  return Math.max(1, Math.round(words / 230 + cjk / 500))
+}
+
 function rowText(item) {
   if (!item) return ""
   if (item.title) return item.title
@@ -1718,6 +1729,7 @@ if (typeof module !== "undefined" && module.exports) {
     extractReadableText: extractReadableText,
     readerFontSize: readerFontSize,
     readerLineHeight: readerLineHeight,
+    readingMinutes: readingMinutes,
     relativeTime: relativeTime,
     stripHtml: stripHtml
   }

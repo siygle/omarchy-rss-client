@@ -205,6 +205,14 @@ test("reader article preferences are clamped", () => {
   assert.equal(Model.readerLineHeight(1.56), 1.6);
 });
 
+test("readingMinutes estimates Latin and CJK text", () => {
+  assert.equal(Model.readingMinutes(""), 0);
+  assert.equal(Model.readingMinutes(undefined), 0);
+  assert.equal(Model.readingMinutes("short text"), 1);
+  assert.equal(Model.readingMinutes(Array(690).fill("word").join(" ")), 3);
+  assert.equal(Model.readingMinutes("中".repeat(1500)), 3);
+});
+
 test("extractReadableText prefers article content and removes unsafe chrome", () => {
   const html = `<!doctype html><html><body><nav>menu</nav><article><h1>Hello</h1><script>bad()</script><p>This is a readable article body with enough text to be selected by the readability helper instead of the surrounding page chrome.</p></article><footer>bye</footer></body></html>`;
   const text = Model.extractReadableText(html);

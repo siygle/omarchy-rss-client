@@ -183,10 +183,35 @@ Panel {
 
         if (root.currentView === "reader") {
           if (readerView.articleOpen) {
+            var article = readerView.articleView
             if (event.key === Qt.Key_O) {
               readerView.openExternalItem(readerView.openedArticle)
-              event.accepted = true
+            } else if (event.key === Qt.Key_Z) {
+              readerView.articleZenMode = !readerView.articleZenMode
+            } else if (event.key === Qt.Key_M) {
+              readerView.toggleReadItem(readerView.openedArticle)
+            } else if (event.key === Qt.Key_F) {
+              if (!article.isFetchingFull) readerView.fetchFullArticle(readerView.openedArticle)
+            } else if (event.key === Qt.Key_Plus || event.key === Qt.Key_Equal) {
+              readerView.updateReaderPreferences(readerView.readerFontSize + 1, readerView.readerLineHeight)
+            } else if (event.key === Qt.Key_Minus) {
+              readerView.updateReaderPreferences(readerView.readerFontSize - 1, readerView.readerLineHeight)
+            } else if (event.key === Qt.Key_J || event.key === Qt.Key_Down) {
+              article.scrollLine(1)
+            } else if (event.key === Qt.Key_K || event.key === Qt.Key_Up) {
+              article.scrollLine(-1)
+            } else if (event.key === Qt.Key_PageDown || (event.key === Qt.Key_Space && !(event.modifiers & Qt.ShiftModifier))) {
+              article.scrollPage(1)
+            } else if (event.key === Qt.Key_PageUp || event.key === Qt.Key_Space) {
+              article.scrollPage(-1)
+            } else if (event.key === Qt.Key_Home) {
+              article.scrollToEdge(false)
+            } else if (event.key === Qt.Key_End) {
+              article.scrollToEdge(true)
+            } else {
+              return
             }
+            event.accepted = true
             return
           }
           if (event.key === Qt.Key_J || event.key === Qt.Key_Down) {
