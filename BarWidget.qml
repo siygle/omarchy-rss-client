@@ -83,6 +83,8 @@ BarWidget {
   }
   property var items: []
   property var pendingFetchQueue: []
+  property var fetchVisited: ({})
+  property var resolvedSubscriptions: ({})
   property int totalFeeds: 0
   property int completedFeeds: 0
   property int failedFeeds: 0
@@ -445,39 +447,28 @@ BarWidget {
     onTriggered: root.persistState()
   }
 
-  function enqueueDiscovered(discoveredUrls) {
-    if (!discoveredUrls || !discoveredUrls.length) return
-    var queue = (root.pendingFetchQueue || []).slice()
-    var added = 0
-    for (var i = 0; i < discoveredUrls.length; i++) {
-      var u = String(discoveredUrls[i] || "").trim()
-      if (!Model.isHttpsUrl(u)) continue
-      var already = false
-      for (var q = 0; q < queue.length; q++) {
-        if (queue[q] === u) { already = true; break }
-      }
-      if (!already) {
-        queue.push(u)
-        added++
-      }
-    }
-    if (added > 0) {
-      root.pendingFetchQueue = queue
-      root.totalFeeds += added
-      pumpQueue()
-    }
+  function enqueueDiscovered(entry, discoveredUrls) {
+    var entries = Model.discoveryEntries(entry, discoveredUrls, root.fetchVisited)
+    if (!entries.length) return false
+    root.pendingFetchQueue = (root.pendingFetchQueue || []).concat(entries)
+    root.totalFeeds += entries.length
+    return true
   }
 
   function onWorkerFinished(worker, exitCode, rawOutput) {
-    var url = worker.currentUrl
-    worker.currentUrl = ""
+    var entry = worker.currentEntry
+    worker.currentEntry = null
+    var url = entry ? entry.subscriptionUrl : ""
 
-    if (exitCode === 0 && rawOutput) {
+    if (entry && entry.discovered && root.resolvedSubscriptions[url]) {
+      // Another discovered candidate for this subscription already succeeded.
+    } else if (entry && exitCode === 0 && rawOutput) {
       var split = Model.splitFetchedBody(rawOutput)
       var body = split.body
       if (Model.isFeedTextResponse(split.contentType, body)) {
         var parsed = Model.parseFeed(body)
         if (parsed.ok && parsed.items && parsed.items.length) {
+          root.resolvedSubscriptions[url] = true
           var sub = root.subscriptionMap[url] || {}
           var subCat = sub.category || ""
           var subCatPath = sub.categoryPath || (subCat ? [subCat] : [])
@@ -514,11 +505,14 @@ BarWidget {
 
           // Schedule debounced state save
           persistDebounceTimer.restart()
-        } else if (Model.looksLikeHtml(body)) {
-          var discovered = Model.discoverFeedUrls(body, url)
+        } else if (!parsed.ok && !entry.discovered && Model.looksLikeHtml(body)) {
+          var discovered = Model.discoverFeedUrls(body, entry.url)
           if (!discovered || discovered.length === 0)
-            discovered = Model.guessFeedUrls(url)
-          enqueueDiscovered(discovered)
+            discovered = Model.guessFeedUrls(entry.url)
+          if (!enqueueDiscovered(entry, discovered)) root.failedFeeds++
+        } else if (!parsed.ok) {
+          // Discovered candidates that answer with HTML end here: no second hop.
+          root.failedFeeds++
         }
       } else {
         root.failedFeeds++
@@ -544,11 +538,16 @@ BarWidget {
       }
 
       if (root.pendingFetchQueue && root.pendingFetchQueue.length > 0) {
-        var nextUrl = root.pendingFetchQueue[0]
-        var rest = []
-        for (var r = 1; r < root.pendingFetchQueue.length; r++) rest.push(root.pendingFetchQueue[r])
-        root.pendingFetchQueue = rest
+        var next = root.pendingFetchQueue[0]
+        root.pendingFetchQueue = root.pendingFetchQueue.slice(1)
 
+        if (next && next.discovered && root.resolvedSubscriptions[next.subscriptionUrl]) {
+          root.completedFeeds++
+          i--
+          continue
+        }
+
+        var nextUrl = next ? next.url : ""
         if (!Model.isHttpsUrl(nextUrl)) {
           root.completedFeeds++
           root.failedFeeds++
@@ -556,7 +555,7 @@ BarWidget {
           continue
         }
 
-        w.currentUrl = nextUrl
+        w.currentEntry = next
         w.command = [
           "curl", "-fsSL",
           "--proto", "=https",
@@ -609,10 +608,12 @@ BarWidget {
       var u = String(urls[i] || "").trim()
       if (Model.isHttpsUrl(u) && !seen[u]) {
         seen[u] = true
-        queue.push(u)
+        queue.push(Model.fetchEntry(u, u, false))
       }
     }
 
+    root.fetchVisited = seen
+    root.resolvedSubscriptions = ({})
     root.pendingFetchQueue = queue
     root.totalFeeds = queue.length
     root.completedFeeds = 0
@@ -706,7 +707,7 @@ BarWidget {
 
   Process {
     id: fetchWorker0
-    property string currentUrl: ""
+    property var currentEntry: null
     stdout: StdioCollector {
       id: fetchWorker0Stdout
       waitForEnd: true
@@ -718,7 +719,7 @@ BarWidget {
 
   Process {
     id: fetchWorker1
-    property string currentUrl: ""
+    property var currentEntry: null
     stdout: StdioCollector {
       id: fetchWorker1Stdout
       waitForEnd: true
@@ -730,7 +731,7 @@ BarWidget {
 
   Process {
     id: fetchWorker2
-    property string currentUrl: ""
+    property var currentEntry: null
     stdout: StdioCollector {
       id: fetchWorker2Stdout
       waitForEnd: true
@@ -742,7 +743,7 @@ BarWidget {
 
   Process {
     id: fetchWorker3
-    property string currentUrl: ""
+    property var currentEntry: null
     stdout: StdioCollector {
       id: fetchWorker3Stdout
       waitForEnd: true

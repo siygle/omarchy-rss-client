@@ -1453,10 +1453,15 @@ function resolveUrl(base, href) {
   return isHttpsUrl(resolved) ? resolved : ""
 }
 
+// Discovery is bounded so a hostile or catch-all HTML endpoint cannot grow the
+// fetch queue: each page yields at most this many candidates, and only a
+// configured subscription URL may run discovery (one hop, see ADR 0009).
+var MAX_DISCOVERED_FEEDS_PER_PAGE = 5
+
 function discoverFeedUrls(html, pageUrl) {
   var tags = String(html || "").match(/<link\b[^>]*>/gi) || []
   var found = []
-  for (var i = 0; i < tags.length; i++) {
+  for (var i = 0; i < tags.length && found.length < MAX_DISCOVERED_FEEDS_PER_PAGE; i++) {
     var tag = tags[i]
     var rel = attributeValue(tag, "rel").toLowerCase()
     var type = attributeValue(tag, "type").toLowerCase()
@@ -1479,6 +1484,33 @@ function guessFeedUrls(pageUrl) {
   var paths = ["/feed.xml", "/atom.xml", "/rss.xml", "/feed", "/index.xml"]
   var out = []
   for (var i = 0; i < paths.length; i++) out.push(origin + paths[i])
+  return out
+}
+
+function fetchEntry(url, subscriptionUrl, discovered) {
+  var u = String(url || "").trim()
+  return {
+    url: u,
+    subscriptionUrl: String(subscriptionUrl || u).trim(),
+    discovered: discovered === true
+  }
+}
+
+// Returns the fetch entries to enqueue after `entry` answered with HTML.
+// `visited` is a per-refresh map of every URL already queued or fetched and is
+// updated in place. Discovered entries never discover again.
+function discoveryEntries(entry, candidateUrls, visited) {
+  if (!entry || entry.discovered) return []
+  var seen = visited || {}
+  var subscriptionUrl = String(entry.subscriptionUrl || entry.url || "").trim()
+  var list = candidateUrls || []
+  var out = []
+  for (var i = 0; i < list.length && out.length < MAX_DISCOVERED_FEEDS_PER_PAGE; i++) {
+    var u = String(list[i] || "").trim()
+    if (!isHttpsUrl(u) || seen[u]) continue
+    seen[u] = true
+    out.push(fetchEntry(u, subscriptionUrl, true))
+  }
   return out
 }
 
@@ -1708,6 +1740,9 @@ if (typeof module !== "undefined" && module.exports) {
     looksLikeHtml: looksLikeHtml,
     discoverFeedUrls: discoverFeedUrls,
     guessFeedUrls: guessFeedUrls,
+    MAX_DISCOVERED_FEEDS_PER_PAGE: MAX_DISCOVERED_FEEDS_PER_PAGE,
+    fetchEntry: fetchEntry,
+    discoveryEntries: discoveryEntries,
     resolveUrl: resolveUrl,
     recentList: recentList,
     rowText: rowText,
