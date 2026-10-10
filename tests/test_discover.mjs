@@ -56,3 +56,67 @@ test("discovery ignores http, file, javascript, img, and enclosure URLs", () => 
   assert.equal(Model.resolveUrl("https://example.com/writing", "file:///etc/passwd"), "");
   assert.equal(Model.resolveUrl("http://example.com/writing", "/feed.xml"), "");
 });
+
+test("discovery caps candidates per page", () => {
+  let links = "";
+  for (let i = 0; i < 1000; i++) {
+    links += `<link rel="alternate" type="application/rss+xml" href="/feed-${i}.xml">`;
+  }
+  const found = Model.discoverFeedUrls(`<html><head>${links}</head></html>`, "https://evil.example/");
+  assert.equal(found.length, Model.MAX_DISCOVERED_FEEDS_PER_PAGE);
+});
+
+test("only a subscription entry may discover, and only once per URL", () => {
+  const visited = { "https://blog.example/writing": true };
+  const sub = Model.fetchEntry("https://blog.example/writing", "https://blog.example/writing", false);
+  const entries = Model.discoveryEntries(sub, Model.guessFeedUrls(sub.url), visited);
+  assert.equal(entries.length, 5);
+  for (const e of entries) {
+    assert.equal(e.discovered, true);
+    assert.equal(e.subscriptionUrl, "https://blog.example/writing");
+  }
+  // A discovered entry answering with HTML never hops again.
+  assert.deepEqual(Model.discoveryEntries(entries[0], ["https://blog.example/other.xml"], visited), []);
+  // Re-offering the same candidates yields nothing new.
+  assert.deepEqual(Model.discoveryEntries(sub, Model.guessFeedUrls(sub.url), visited), []);
+});
+
+test("hostile endpoint returning fresh links on every request stays bounded", () => {
+  const visited = {};
+  const queue = [Model.fetchEntry("https://evil.example/", "https://evil.example/", false)];
+  visited[queue[0].url] = true;
+  let fetches = 0;
+  let counter = 0;
+  while (queue.length && fetches < 10000) {
+    const entry = queue.shift();
+    fetches++;
+    let links = "";
+    for (let i = 0; i < 50; i++) {
+      links += `<link rel="alternate" type="application/atom+xml" href="/f${counter++}.xml">`;
+    }
+    const html = `<html><head>${links}</head></html>`;
+    queue.push(...Model.discoveryEntries(entry, Model.discoverFeedUrls(html, entry.url), visited));
+  }
+  assert.equal(fetches, 1 + Model.MAX_DISCOVERED_FEEDS_PER_PAGE);
+});
+
+test("catch-all HTML origin does not loop through guessed paths", () => {
+  const visited = {};
+  const queue = [Model.fetchEntry("https://spa.example/app", "https://spa.example/app", false)];
+  visited[queue[0].url] = true;
+  let fetches = 0;
+  while (queue.length && fetches < 1000) {
+    const entry = queue.shift();
+    fetches++;
+    queue.push(...Model.discoveryEntries(entry, Model.guessFeedUrls(entry.url), visited));
+  }
+  assert.equal(fetches, 6);
+});
+
+test("discoveryEntries rejects non-https candidates", () => {
+  const sub = Model.fetchEntry("https://a.example/", "https://a.example/", false);
+  assert.deepEqual(
+    Model.discoveryEntries(sub, ["http://a.example/feed.xml", "file:///etc/passwd", ""], {}),
+    []
+  );
+});
