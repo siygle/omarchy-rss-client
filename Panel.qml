@@ -171,9 +171,9 @@ Panel {
       onTabRequested: function(direction) { root.switchPanel(direction) }
 
       Keys.onPressed: function(event) {
-        // If a TextInput has active focus, let it handle standard typing
+        // If a text field has active focus, let it handle standard typing
         var activeItem = keyCatcher.activeFocusItem
-        if (activeItem && (activeItem instanceof TextInput || activeItem.selectByMouse !== undefined)) {
+        if (activeItem && (activeItem instanceof TextInput || activeItem instanceof TextEdit || activeItem.selectByMouse !== undefined)) {
           if (event.key === Qt.Key_Escape) {
             keyCatcher.forceActiveFocus()
             event.accepted = true

@@ -580,8 +580,10 @@ Item {
                       border.color: retentionInput.activeFocus ? Color.accent : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.12)
                       border.width: 1
 
-                      TextInput {
+                      SafeTextInput {
                         id: retentionInput
+                        maximumLength: 4
+                        digitsOnly: true
                         anchors.fill: parent
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -592,7 +594,6 @@ Item {
                         color: root.contentForeground
                         selectByMouse: true
                         inputMethodHints: Qt.ImhDigitsOnly
-                        validator: RegularExpressionValidator { regularExpression: /^[0-9]+$/ }
                         onEditingFinished: {
                           var val = Model.normalizeRetentionDays(text, root.retentionDays)
                           text = String(val)

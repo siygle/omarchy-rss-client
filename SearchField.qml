@@ -50,8 +50,9 @@ Item {
         color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.4)
       }
 
-      TextInput {
+      SafeTextInput {
         id: input
+        maximumLength: 256
         anchors.verticalCenter: parent.verticalCenter
         width: parent.width - Style.space(16) - (clearBtn.visible ? Style.space(16) : 0)
         font.family: root.contentFontFamily
