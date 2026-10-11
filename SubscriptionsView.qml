@@ -296,8 +296,9 @@ Item {
           border.color: urlInput.activeFocus ? Color.accent : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.1)
           border.width: 1
 
-          TextInput {
+          SafeTextInput {
             id: urlInput
+            maximumLength: 2048
             anchors.fill: parent
             anchors.margins: Style.space(4)
             text: root.draftUrl
@@ -309,8 +310,6 @@ Item {
               if (root.statusIsError) root.statusMessage = ""
             }
             onAccepted: root.saveFeed()
-            Keys.onReturnPressed: root.saveFeed()
-            Keys.onEnterPressed: root.saveFeed()
             selectByMouse: true
 
             Text {
@@ -338,8 +337,9 @@ Item {
             border.color: titleInput.activeFocus ? Color.accent : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.1)
             border.width: 1
 
-            TextInput {
+            SafeTextInput {
               id: titleInput
+              maximumLength: 256
               anchors.fill: parent
               anchors.margins: Style.space(4)
               text: root.draftTitle
@@ -348,8 +348,6 @@ Item {
               color: root.contentForeground
               onTextChanged: root.draftTitle = text
               onAccepted: root.saveFeed()
-              Keys.onReturnPressed: root.saveFeed()
-              Keys.onEnterPressed: root.saveFeed()
               selectByMouse: true
 
               Text {
@@ -386,8 +384,9 @@ Item {
                 anchors.rightMargin: Style.space(4)
                 spacing: Style.space(2)
 
-                TextInput {
+                SafeTextInput {
                   id: customCatInput
+                  maximumLength: 128
                   width: parent.width - Style.space(20)
                   anchors.verticalCenter: parent.verticalCenter
                   text: root.customCategoryText
@@ -396,8 +395,6 @@ Item {
                   color: root.contentForeground
                   onTextChanged: root.customCategoryText = text
                   onAccepted: root.saveFeed()
-                  Keys.onReturnPressed: root.saveFeed()
-                  Keys.onEnterPressed: root.saveFeed()
                   selectByMouse: true
 
                   Text {
