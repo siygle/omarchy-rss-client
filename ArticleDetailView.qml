@@ -14,6 +14,8 @@ Item {
   property real readerLineHeight: 1.3
   property bool zenMode: false
   property bool isRead: false
+  property bool hasPrevUnread: false
+  property bool hasNextUnread: false
   property color contentForeground: Color.foreground
   property string contentFontFamily: Style.font.family
 
@@ -22,6 +24,8 @@ Item {
   signal fetchFullRequested()
   signal readerPreferencesChanged(int fontSize, real lineHeight)
   signal toggleReadRequested()
+  signal prevUnreadRequested()
+  signal nextUnreadRequested()
 
   readonly property color mutedColor: Qt.rgba(contentForeground.r, contentForeground.g, contentForeground.b, 0.55)
   readonly property bool hasReadableText: String(root.fullText || (root.item && root.item.excerpt) || "").trim() !== ""
@@ -140,6 +144,26 @@ Item {
         foreground: root.contentForeground
         tip: "Back to list (Esc)"
         onClicked: root.backRequested()
+      }
+
+      ToolbarButton {
+        visible: root.zenMode
+        icon: "󰅃"
+        foreground: root.contentForeground
+        active: root.hasPrevUnread
+        opacity: active ? 1.0 : 0.35
+        tip: root.hasPrevUnread ? "Previous unread article (P)" : "No previous unread article"
+        onClicked: root.prevUnreadRequested()
+      }
+
+      ToolbarButton {
+        visible: root.zenMode
+        icon: "󰅀"
+        foreground: root.contentForeground
+        active: root.hasNextUnread
+        opacity: active ? 1.0 : 0.35
+        tip: root.hasNextUnread ? "Next unread article (N)" : "No more unread articles"
+        onClicked: root.nextUnreadRequested()
       }
 
       Text {
@@ -372,6 +396,25 @@ Item {
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             onClicked: root.openExternalRequested()
+          }
+        }
+
+        Text {
+          visible: root.hasNextUnread
+          anchors.horizontalCenter: parent.horizontalCenter
+          text: "Next unread article 󰁔"
+          textFormat: Text.PlainText
+          font.family: root.contentFontFamily
+          font.pixelSize: Math.max(10, root.readerFontSize - 3)
+          font.underline: nextUnreadMouse.containsMouse
+          color: nextUnreadMouse.containsMouse ? Color.accent : root.mutedColor
+
+          MouseArea {
+            id: nextUnreadMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.nextUnreadRequested()
           }
         }
       }

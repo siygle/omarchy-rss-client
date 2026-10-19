@@ -188,6 +188,10 @@ Panel {
               readerView.openExternalItem(readerView.openedArticle)
             } else if (event.key === Qt.Key_Z) {
               readerView.articleZenMode = !readerView.articleZenMode
+            } else if (event.key === Qt.Key_N && readerView.articleZenMode) {
+              readerView.openAdjacentUnread(1)
+            } else if (event.key === Qt.Key_P && readerView.articleZenMode) {
+              readerView.openAdjacentUnread(-1)
             } else if (event.key === Qt.Key_M) {
               readerView.toggleReadItem(readerView.openedArticle)
             } else if (event.key === Qt.Key_F) {
