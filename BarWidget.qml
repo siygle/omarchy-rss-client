@@ -90,6 +90,8 @@ BarWidget {
   property int failedFeeds: 0
   property bool isFetching: false
   property bool refreshPending: false
+  // URL list of the last fetch round; see onConfiguredFeedUrlsChanged.
+  property string fetchedFeedUrlsKey: ""
   property bool stateReady: false
   property var articleContentMap: ({})
   property string articleFetchIdentity: ""
@@ -466,7 +468,7 @@ BarWidget {
       var split = Model.splitFetchedBody(rawOutput)
       var body = split.body
       if (Model.isFeedTextResponse(split.contentType, body)) {
-        var parsed = Model.parseFeed(body)
+        var parsed = Model.parseFeed(body, root.configuredMaxItemsPerFeed)
         if (parsed.ok && parsed.items && parsed.items.length) {
           root.resolvedSubscriptions[url] = true
           var sub = root.subscriptionMap[url] || {}
@@ -588,6 +590,7 @@ BarWidget {
 
   function startFetch() {
     var urls = root.configuredFeedUrls || []
+    root.fetchedFeedUrlsKey = urls.join("\n")
     if (urls.length === 0) {
       root.pendingFetchQueue = []
       root.items = []
@@ -658,7 +661,14 @@ BarWidget {
 
   onBarChanged: injectPanel()
   onSettingsChanged: injectPanel()
-  onConfiguredFeedUrlsChanged: fetchFeed()
+  // configuredFeedUrls is rebuilt on every settings write (marking an article
+  // read, changing the font size), so only refetch when the URLs differ.
+  // The first fetch waits for the state file, which starts it.
+  onConfiguredFeedUrlsChanged: {
+    if (!root.stateReady) return
+    if ((root.configuredFeedUrls || []).join("\n") === root.fetchedFeedUrlsKey) return
+    fetchFeed()
+  }
   onConfiguredRetentionDaysChanged: applyRetentionCleanup()
 
   Component.onCompleted: mkdirProcess.running = true
@@ -686,6 +696,9 @@ BarWidget {
     atomicWrites: true
     printErrors: false
     onLoaded: {
+      // The file loads twice at startup (when the path is set, then again
+      // after mkdirProcess), so only the first load starts a fetch round.
+      var firstLoad = !root.stateReady
       var parsed = Model.parseState(text())
       root.localReadSet = parsed.readIdentities || []
       if (parsed.items && parsed.items.length) {
@@ -696,7 +709,7 @@ BarWidget {
       }
       root.stateReady = true
       root.injectPanel()
-      root.fetchFeed()
+      if (firstLoad) root.fetchFeed()
     }
     onLoadFailed: {
       root.stateReady = true

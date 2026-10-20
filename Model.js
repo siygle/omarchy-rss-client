@@ -1349,10 +1349,42 @@ function tagInner(block, tag) {
   return match ? match[1] : ""
 }
 
+var RFC822_MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 }
+var RFC822_ZONES = { gmt: 0, ut: 0, utc: 0, z: 0, est: -300, edt: -240, cst: -360, cdt: -300, mst: -420, mdt: -360, pst: -480, pdt: -420 }
+
+// RSS dates ("Tue, 06 Oct 2026 00:00:00 GMT") parsed by hand. QML's
+// Date.parse spends ~5ms on each named-zone date, which adds up to seconds of
+// blocked UI for feeds with hundreds of items. Returns null when the text is
+// not RFC 822 with an explicit zone so the caller can fall back to
+// Date.parse, which reads zoneless dates as local time.
+function parseRfc822Date(text) {
+  var m = /^(?:[A-Za-z]{3},?\s+)?(\d{1,2})\s+([A-Za-z]{3})[A-Za-z]*\s+(\d{2,4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s+([A-Za-z]{1,3}|[+-]\d{4})$/.exec(text)
+  if (!m) return null
+  var month = RFC822_MONTHS[m[2].toLowerCase()]
+  if (month === undefined) return null
+  var year = Number(m[3])
+  if (m[3].length === 2) year += year < 50 ? 2000 : 1900
+  var offset = 0
+  var zone = m[7]
+  if (zone[0] === "+" || zone[0] === "-") {
+    var mins = Number(zone.substr(1, 2)) * 60 + Number(zone.substr(3, 2))
+    offset = zone[0] === "-" ? -mins : mins
+  } else {
+    offset = RFC822_ZONES[zone.toLowerCase()]
+    if (offset === undefined) return null
+  }
+  // setUTCFullYear keeps years below 100 literal, unlike Date.UTC.
+  var date = new Date(0)
+  date.setUTCFullYear(year, month, Number(m[1]))
+  date.setUTCHours(Number(m[4]), Number(m[5]), Number(m[6] || 0), 0)
+  return date.getTime() - offset * 60000
+}
+
 function parsePubDate(text) {
   var raw = stripHtml(text)
   if (!raw) return null
-  var ms = Date.parse(raw)
+  var ms = parseRfc822Date(raw)
+  if (ms === null) ms = Date.parse(raw)
   if (!isFinite(ms)) return null
   return ms
 }
@@ -1514,42 +1546,55 @@ function discoveryEntries(entry, candidateUrls, visited) {
   return out
 }
 
-function parseAtom(xml) {
+function parseAtom(xml, maxItems) {
   var source = String(xml || "")
   if (!/<feed\b/i.test(source)) return { ok: false, feedName: "", items: [] }
 
   var entries = source.match(/<entry\b[\s\S]*?<\/entry>/gi) || []
   var withoutEntries = source.replace(/<entry\b[\s\S]*?<\/entry>/gi, "")
   var feedName = stripHtml(tagInner(withoutEntries, "title"))
-  var items = []
+  var candidates = []
   for (var i = 0; i < entries.length; i++) {
     var block = entries[i]
     var identity = stripHtml(tagInner(block, "id")) || alternateLink(block)
     if (!identity) continue
-    var link = alternateLink(block)
-    var title = stripHtml(tagInner(block, "title"))
-    var excerpt = stripHtml(tagInner(block, "content")) || stripHtml(tagInner(block, "summary"))
     var published = parsePubDate(tagInner(block, "published"))
     if (published == null) published = parsePubDate(tagInner(block, "updated"))
+    candidates.push({ block: block, identity: identity, pubDateMs: published })
+  }
+  var items = []
+  var kept = keepRecentCandidates(candidates, maxItems)
+  for (var k = 0; k < kept.length; k++) {
+    var entry = kept[k].block
     items.push({
-      identity: identity,
-      link: link,
-      title: title,
-      excerpt: excerpt,
+      identity: kept[k].identity,
+      link: alternateLink(entry),
+      title: stripHtml(tagInner(entry, "title")),
+      excerpt: stripHtml(tagInner(entry, "content")) || stripHtml(tagInner(entry, "summary")),
       feedName: feedName,
-      pubDateMs: published
+      pubDateMs: kept[k].pubDateMs
     })
   }
   return { ok: true, feedName: feedName, items: items }
 }
 
-function parseFeed(xml) {
-  var rss = parseRss20(xml)
-  if (rss.ok) return rss
-  return parseAtom(xml)
+// Stripping item bodies dominates parse time and only the newest
+// `maxItems` survive mergeFeedArticles, so callers that know the cap pass it
+// to skip that work for everything else. Order matches recentList so the
+// kept set is the same one the merge would keep.
+function keepRecentCandidates(candidates, maxItems) {
+  if (maxItems === undefined || maxItems === null) return candidates
+  return recentList(candidates, maxItems)
 }
 
-function parseRss20(xml) {
+// Passing `maxItems` returns only the newest items, in recentList order.
+function parseFeed(xml, maxItems) {
+  var rss = parseRss20(xml, maxItems)
+  if (rss.ok) return rss
+  return parseAtom(xml, maxItems)
+}
+
+function parseRss20(xml, maxItems) {
   var source = String(xml || "")
   var hasRss20 = /<rss\b[^>]*version\s*=\s*["']2\.0["']/i.test(source)
   var hasAtomFeed = /<feed\b[^>]*xmlns\s*=\s*["'][^"']*Atom/i.test(source) || /<feed\b[^>]*xmlns\s*=\s*["']http:\/\/www\.w3\.org\/2005\/Atom["']/i.test(source)
@@ -1559,23 +1604,27 @@ function parseRss20(xml) {
 
   var channel = (source.match(/<channel\b[\s\S]*<\/channel>/i) || [source])[0]
   var feedName = stripHtml(tagInner(channel, "title"))
-  var items = []
   var itemBlocks = channel.match(/<item\b[\s\S]*?<\/item>/gi) || []
+  var candidates = []
   for (var i = 0; i < itemBlocks.length; i++) {
     var block = itemBlocks[i]
     var guid = stripHtml(tagInner(block, "guid"))
     var link = stripHtml(tagInner(block, "link"))
     var identity = guid || link
     if (!identity) continue
-    var title = stripHtml(tagInner(block, "title"))
-    var excerpt = stripHtml(tagInner(block, "description"))
+    candidates.push({ block: block, identity: identity, link: link, pubDateMs: parsePubDate(tagInner(block, "pubDate")) })
+  }
+  var items = []
+  var kept = keepRecentCandidates(candidates, maxItems)
+  for (var k = 0; k < kept.length; k++) {
+    var item = kept[k].block
     items.push({
-      identity: identity,
-      link: link,
-      title: title,
-      excerpt: excerpt,
+      identity: kept[k].identity,
+      link: kept[k].link,
+      title: stripHtml(tagInner(item, "title")),
+      excerpt: stripHtml(tagInner(item, "description")),
       feedName: feedName,
-      pubDateMs: parsePubDate(tagInner(block, "pubDate"))
+      pubDateMs: kept[k].pubDateMs
     })
   }
   return { ok: true, feedName: feedName, items: items }
@@ -1737,6 +1786,8 @@ if (typeof module !== "undefined" && module.exports) {
     parseRss20: parseRss20,
     parseAtom: parseAtom,
     parseFeed: parseFeed,
+    parsePubDate: parsePubDate,
+    parseRfc822Date: parseRfc822Date,
     looksLikeHtml: looksLikeHtml,
     discoverFeedUrls: discoverFeedUrls,
     guessFeedUrls: guessFeedUrls,
