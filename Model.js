@@ -362,6 +362,28 @@ function escapeXml(str) {
     .replace(/'/g, "&apos;")
 }
 
+// OPML is untrusted input. Bound what one import can create so a crafted file
+// cannot turn nesting depth x feed count into unbounded work in the shell.
+var MAX_CATEGORY_DEPTH = 8
+var MAX_CATEGORY_NAME_LENGTH = 200
+var MAX_SUBSCRIPTION_TITLE_LENGTH = 300
+var MAX_OPML_FEEDS = 1000
+
+function clampText(value, maxLength) {
+  var s = String(value == null ? "" : value).trim()
+  return s.length > maxLength ? s.slice(0, maxLength).trim() : s
+}
+
+function normalizeCategoryPath(path) {
+  var out = []
+  if (!Array.isArray(path)) return out
+  for (var i = 0; i < path.length && out.length < MAX_CATEGORY_DEPTH; i++) {
+    var name = clampText(path[i], MAX_CATEGORY_NAME_LENGTH)
+    if (name) out.push(name)
+  }
+  return out
+}
+
 function normalizeSubscriptions(rawSubscriptions, rawFeedUrls) {
   var subs = []
   if (typeof rawSubscriptions === "string") {
@@ -383,12 +405,12 @@ function normalizeSubscriptions(rawSubscriptions, rawFeedUrls) {
     if (s && typeof s === "object" && isHttpsUrl(s.url)) {
       var u = String(s.url || "").trim()
       if (!existingMap[u]) {
-        var catPath = Array.isArray(s.categoryPath)
-          ? s.categoryPath.map(function(c) { return String(c || "").trim() }).filter(Boolean)
-          : (s.category ? [String(s.category).trim()] : [])
+        var catPath = normalizeCategoryPath(Array.isArray(s.categoryPath)
+          ? s.categoryPath
+          : (s.category ? [s.category] : []))
         var normSub = {
           url: u,
-          title: String(s.title || extractDomainTitle(u)).trim() || extractDomainTitle(u),
+          title: clampText(s.title, MAX_SUBSCRIPTION_TITLE_LENGTH) || extractDomainTitle(u),
           categoryPath: catPath,
           category: catPath.length ? catPath[catPath.length - 1] : "",
           enabled: s.enabled !== false
@@ -444,11 +466,18 @@ function getXmlAttr(attrs, name) {
 
 function parseOpmlStructured(text) {
   var raw = String(text || "").trim()
-  if (!raw) return { subscriptions: [], categories: [], totalFound: 0, invalidCount: 0 }
+  if (!raw) return { subscriptions: [], categories: [], totalFound: 0, invalidCount: 0, duplicateCount: 0, skippedCount: 0 }
 
   var subscriptions = []
-  var categoryStack = []
+  var seenUrls = {}
+  // One entry per open <outline>, so closing tags stay balanced. Only the first
+  // MAX_CATEGORY_DEPTH named folders are kept in namedPath; deeper folders still
+  // nest but add nothing, so each feed copies at most MAX_CATEGORY_DEPTH names.
+  var openNamed = []
+  var namedPath = []
   var invalidCount = 0
+  var duplicateCount = 0
+  var skippedCount = 0
   var totalFound = 0
 
   var tagRe = /<\/?outline\b([^>]*?)(\/?)>/gi
@@ -461,9 +490,7 @@ function parseOpmlStructured(text) {
     var isClosingTag = fullMatch.indexOf("</outline") === 0
 
     if (isClosingTag) {
-      if (categoryStack.length > 0) {
-        categoryStack.pop()
-      }
+      if (openNamed.length > 0 && openNamed.pop()) namedPath.pop()
       continue
     }
 
@@ -473,29 +500,33 @@ function parseOpmlStructured(text) {
 
     if (xmlUrl) {
       totalFound++
-      if (isHttpsUrl(xmlUrl)) {
-        var catPath = categoryStack.filter(function(c) { return Boolean(c) })
+      if (!isHttpsUrl(xmlUrl)) {
+        invalidCount++
+      } else if (seenUrls[xmlUrl]) {
+        duplicateCount++
+      } else if (subscriptions.length >= MAX_OPML_FEEDS) {
+        skippedCount++
+      } else {
+        seenUrls[xmlUrl] = true
+        var catPath = namedPath.slice()
         subscriptions.push({
           url: xmlUrl,
-          title: title || extractDomainTitle(xmlUrl),
+          title: clampText(title, MAX_SUBSCRIPTION_TITLE_LENGTH) || extractDomainTitle(xmlUrl),
           categoryPath: catPath,
           category: catPath.length ? catPath[catPath.length - 1] : "",
           enabled: true
         })
-      } else {
-        invalidCount++
       }
     }
 
     if (!isSelfClosing) {
-      var catName = textAttr || title || ""
-      if (catName && !xmlUrl) {
-        categoryStack.push(catName)
-      } else if (!xmlUrl) {
-        categoryStack.push("Uncategorized")
-      } else {
-        categoryStack.push(null)
+      var named = false
+      if (!xmlUrl && namedPath.length < MAX_CATEGORY_DEPTH) {
+        var catName = clampText(textAttr || title, MAX_CATEGORY_NAME_LENGTH) || "Uncategorized"
+        namedPath.push(catName)
+        named = true
       }
+      openNamed.push(named)
     }
   }
 
@@ -516,7 +547,9 @@ function parseOpmlStructured(text) {
     subscriptions: subscriptions,
     categories: categories,
     totalFound: totalFound,
-    invalidCount: invalidCount
+    invalidCount: invalidCount,
+    duplicateCount: duplicateCount,
+    skippedCount: skippedCount
   }
 }
 
@@ -531,12 +564,32 @@ function parseOpmlDetails(text) {
     subscriptions: structured.subscriptions,
     categories: structured.categories,
     invalidCount: structured.invalidCount,
+    duplicateCount: structured.duplicateCount,
+    skippedCount: structured.skippedCount,
     totalFound: structured.totalFound
   }
 }
 
 function parseOpml(text) {
   return parseOpmlDetails(text).feeds
+}
+
+// Import details for OPML, falling back to JSON share payloads or plain URL
+// lists, with the same per-import feed limit as OPML.
+function parseImportDetails(text) {
+  var details = parseOpmlDetails(text)
+  if (details.feeds.length) return details
+  var parsed = parseSharePayload(text)
+  var kept = parsed.slice(0, MAX_OPML_FEEDS)
+  return {
+    feeds: kept,
+    subscriptions: normalizeSubscriptions([], kept),
+    categories: [],
+    invalidCount: 0,
+    duplicateCount: 0,
+    skippedCount: parsed.length - kept.length,
+    totalFound: parsed.length
+  }
 }
 
 function mergeSubscriptions(current, incoming) {
@@ -748,6 +801,7 @@ function calculateImportResult(currentSubs, parsedResult, filename) {
   var incoming = []
   var invalidCount = 0
   var parsedCategories = []
+  var skippedCount = 0
 
   if (parsedResult && typeof parsedResult === "object") {
     if (parsedResult.subscriptions && Array.isArray(parsedResult.subscriptions)) {
@@ -759,6 +813,7 @@ function calculateImportResult(currentSubs, parsedResult, filename) {
     }
     invalidCount = typeof parsedResult.invalidCount === "number" ? parsedResult.invalidCount : 0
     if (Array.isArray(parsedResult.categories)) parsedCategories = parsedResult.categories
+    skippedCount = typeof parsedResult.skippedCount === "number" ? parsedResult.skippedCount : 0
   } else {
     incoming = normalizeSubscriptions(parsedResult)
   }
@@ -792,6 +847,9 @@ function calculateImportResult(currentSubs, parsedResult, filename) {
   if (invalidCount > 0) {
     parts.push(invalidCount + " need attention")
   }
+  if (skippedCount > 0) {
+    parts.push(skippedCount + " skipped (limit " + MAX_OPML_FEEDS + " per import)")
+  }
   var message = parts.join(" · ")
   var nextSubs = mergeSubscriptions(current, added)
   var nextFeeds = []
@@ -802,6 +860,7 @@ function calculateImportResult(currentSubs, parsedResult, filename) {
     imported: added.length,
     duplicates: duplicates,
     invalid: invalidCount,
+    skipped: skippedCount,
     message: message,
     newSubscriptions: nextSubs,
     newFeeds: nextFeeds,
@@ -1783,6 +1842,7 @@ if (typeof module !== "undefined" && module.exports) {
     redactForLog: redactForLog,
     parseOpmlDetails: parseOpmlDetails,
     parseOpmlStructured: parseOpmlStructured,
+    parseImportDetails: parseImportDetails,
     parseOpml: parseOpml,
     calculateImportResult: calculateImportResult,
     parseSharePayload: parseSharePayload,
@@ -1833,6 +1893,10 @@ if (typeof module !== "undefined" && module.exports) {
     DEFAULT_RETENTION_DAYS: DEFAULT_RETENTION_DAYS,
     MIN_RETENTION_DAYS: MIN_RETENTION_DAYS,
     MAX_RETENTION_DAYS: MAX_RETENTION_DAYS,
+    MAX_CATEGORY_DEPTH: MAX_CATEGORY_DEPTH,
+    MAX_CATEGORY_NAME_LENGTH: MAX_CATEGORY_NAME_LENGTH,
+    MAX_SUBSCRIPTION_TITLE_LENGTH: MAX_SUBSCRIPTION_TITLE_LENGTH,
+    MAX_OPML_FEEDS: MAX_OPML_FEEDS,
     normalizeRetentionDays: normalizeRetentionDays,
     pruneArticlesByRetention: pruneArticlesByRetention,
     extractReadableText: extractReadableText,

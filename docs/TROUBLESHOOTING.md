@@ -31,7 +31,19 @@ If you just installed Omarchy RSS Client and the bar icon is not visible:
 
 ---
 
-## 3. OPML File Chooser Does Not Open
+## 3. OPML Import Limits
+
+OPML files are untrusted input, so each import is bounded:
+
+- Files larger than 5 MiB are rejected.
+- At most 1,000 feeds are imported at once; the import message reports how many were skipped. Import the rest in a second file.
+- Category folders are kept up to 8 levels deep; deeper folders are flattened into the eighth level.
+- Category names are cut to 200 characters and feed titles to 300.
+- A feed URL that appears more than once is imported only once, in its first category.
+
+---
+
+## 4. OPML File Chooser Does Not Open
 
 Omarchy RSS Client uses the standard Freedesktop desktop portal (`org.freedesktop.portal.FileChooser`) for native file selection.
 
@@ -43,7 +55,7 @@ Omarchy RSS Client uses the standard Freedesktop desktop portal (`org.freedeskto
 
 ---
 
-## 4. Resetting Reader Cache and State
+## 5. Resetting Reader Cache and State
 
 If you want to clear the locally cached article history and read tracking state:
 
