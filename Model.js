@@ -1158,6 +1158,28 @@ function filterReaderArticles(articles, options) {
   return out
 }
 
+// Finds the nearest unread article before (direction < 0) or after
+// (direction > 0) the current one in list order. The current article is
+// usually already read, so the list must still contain it to anchor the
+// search; when it is missing, the search starts from the list edge.
+function adjacentUnreadArticle(articles, readSet, current, direction) {
+  var list = articles || []
+  var step = direction < 0 ? -1 : 1
+  var currentId = itemIdentity(current)
+  var start = -1
+  for (var i = 0; currentId && i < list.length; i++) {
+    if (itemIdentity(list[i]) === currentId) {
+      start = i
+      break
+    }
+  }
+  if (start === -1) start = step > 0 ? -1 : list.length
+  for (var j = start + step; j >= 0 && j < list.length; j += step) {
+    if (!isRead(readSet, list[j])) return list[j]
+  }
+  return null
+}
+
 function generateOpml(subscriptions) {
   var subs = normalizeSubscriptions(subscriptions)
   var xml = ['<?xml version="1.0" encoding="UTF-8"?>', '<opml version="2.0">', '  <head>', '    <title>Omarchy RSS Subscriptions</title>', '  </head>', '  <body>']
@@ -1723,6 +1745,7 @@ if (typeof module !== "undefined" && module.exports) {
     enrichArticles: enrichArticles,
     extractCategories: extractCategories,
     filterReaderArticles: filterReaderArticles,
+    adjacentUnreadArticle: adjacentUnreadArticle,
     generateOpml: generateOpml,
     extractDomainTitle: extractDomainTitle,
     escapeXml: escapeXml,

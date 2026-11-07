@@ -641,6 +641,26 @@ test("enrichArticles associates subscription metadata with articles", () => {
   assert.equal(enriched[1].subscriptionUrl, "https://legacy.example/rss");
 });
 
+test("adjacentUnreadArticle steps to the nearest unread neighbour", () => {
+  const articles = [
+    { identity: "a" },
+    { identity: "b" },
+    { identity: "c" },
+    { identity: "d" },
+    { identity: "e" }
+  ];
+  const readSet = ["b", "c", "e"];
+
+  assert.equal(Model.adjacentUnreadArticle(articles, readSet, articles[2], 1).identity, "d");
+  assert.equal(Model.adjacentUnreadArticle(articles, readSet, articles[2], -1).identity, "a");
+  assert.equal(Model.adjacentUnreadArticle(articles, readSet, articles[3], 1), null);
+  assert.equal(Model.adjacentUnreadArticle(articles, readSet, articles[0], -1), null);
+  // Unknown current article: search from the list edge.
+  assert.equal(Model.adjacentUnreadArticle(articles, readSet, { identity: "x" }, 1).identity, "a");
+  assert.equal(Model.adjacentUnreadArticle(articles, readSet, { identity: "x" }, -1).identity, "d");
+  assert.equal(Model.adjacentUnreadArticle([], readSet, articles[0], 1), null);
+});
+
 test("filterReaderArticles filters accurately using enriched subscription metadata", () => {
   const subs = [
     { url: "https://archlinux.org/feed", title: "Arch", category: "Linux", categoryPath: ["Linux"] },

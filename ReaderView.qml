@@ -83,6 +83,29 @@ Item {
     }
   }
 
+  // Steps to the nearest unread article in the current category/search,
+  // keeping the reading mode (zen or not) the user is in.
+  function openAdjacentUnread(direction) {
+    var next = direction < 0 ? root.prevUnreadArticle : root.nextUnreadArticle
+    if (!next) return
+    var zen = root.articleZenMode
+    root.activateItem(next)
+    root.articleZenMode = zen
+    root.selectArticleInList(next)
+  }
+
+  function selectArticleInList(item) {
+    var id = Model.itemIdentity(item)
+    var perPage = Math.max(1, root.itemsPerPage)
+    for (var i = 0; i < allFilteredArticles.length; i++) {
+      if (Model.itemIdentity(allFilteredArticles[i]) === id) {
+        root.currentPage = Math.floor(i / perPage)
+        root.selectedIndex = i % perPage
+        return
+      }
+    }
+  }
+
   function openExternalItem(item) {
     if (!item) return
     if (root.hostWidget && typeof root.hostWidget.activateItem === "function") {
@@ -161,6 +184,19 @@ Item {
     subscriptions: root.subscriptions,
     feedCategoryMap: root.feedCategoryMap
   })
+
+  // Navigation ignores the unread-only filter so the opened article, which is
+  // marked read on open, still anchors the search for its neighbours.
+  readonly property var navigationArticles: Model.filterReaderArticles(root.items, {
+    category: root.currentCategory,
+    unreadOnly: false,
+    search: root.searchQuery,
+    readSet: [],
+    subscriptions: root.subscriptions,
+    feedCategoryMap: root.feedCategoryMap
+  })
+  readonly property var nextUnreadArticle: root.articleOpen ? Model.adjacentUnreadArticle(root.navigationArticles, root.readSet, root.openedArticle, 1) : null
+  readonly property var prevUnreadArticle: root.articleOpen ? Model.adjacentUnreadArticle(root.navigationArticles, root.readSet, root.openedArticle, -1) : null
 
   readonly property int totalFilteredCount: allFilteredArticles.length
   readonly property int totalPages: Math.max(1, Math.ceil(totalFilteredCount / Math.max(1, root.itemsPerPage)))
@@ -750,6 +786,8 @@ Item {
     readerFontSize: root.readerFontSize
     readerLineHeight: root.readerLineHeight
     zenMode: root.articleZenMode
+    hasPrevUnread: root.prevUnreadArticle !== null
+    hasNextUnread: root.nextUnreadArticle !== null
     isRead: Model.isRead(root.readSet, root.openedArticle)
     contentForeground: root.contentForeground
     contentFontFamily: root.contentFontFamily
@@ -759,5 +797,7 @@ Item {
     onZenModeChanged: root.articleZenMode = zenMode
     onReaderPreferencesChanged: function(fontSize, lineHeight) { root.updateReaderPreferences(fontSize, lineHeight) }
     onToggleReadRequested: root.toggleReadItem(root.openedArticle)
+    onPrevUnreadRequested: root.openAdjacentUnread(-1)
+    onNextUnreadRequested: root.openAdjacentUnread(1)
   }
 }
