@@ -62,6 +62,44 @@ function maxFeedBytes() {
   return 2097152
 }
 
+// Every network fetch goes through this argv so curl sees exactly one URL.
+// Feed and article URLs come from remote documents (autodiscovered <link>
+// hrefs), and curl's URL globbing would expand "[1-9999]" or "{a,b,...}" into
+// thousands of transfers. --max-filesize bounds each transfer, not their sum,
+// so the shell's stdout collector could grow without limit. -q must be first:
+// it stops ~/.curlrc from re-enabling globbing or adding URLs.
+var CURL_USER_AGENT = "omarchy-rss-client/0.1.0"
+var MAX_ARTICLE_BYTES = 1048576
+var FEED_ACCEPT = "Accept: application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.9, text/html;q=0.8"
+var ARTICLE_ACCEPT = "Accept: text/html, application/xhtml+xml, application/xml;q=0.9, text/plain;q=0.8"
+
+function curlFetchCommand(url, options) {
+  var value = String(url || "").trim()
+  if (!isHttpsUrl(value)) return []
+  var opts = options || {}
+  var command = [
+    "curl", "-q", "--globoff", "-fsSL",
+    "--proto", "=https",
+    "--proto-redir", "=https",
+    "--max-redirs", "5",
+    "--max-filesize", String(opts.maxBytes || maxFeedBytes()),
+    "--max-time", "20",
+    "-A", CURL_USER_AGENT,
+    "-H", opts.accept || FEED_ACCEPT
+  ]
+  if (opts.writeOut) command.push("-w", String(opts.writeOut))
+  command.push("--url", value)
+  return command
+}
+
+function feedFetchCommand(url) {
+  return curlFetchCommand(url, { accept: FEED_ACCEPT, writeOut: "\n__OMARCHY_CT__:%{content_type}" })
+}
+
+function articleFetchCommand(url) {
+  return curlFetchCommand(url, { accept: ARTICLE_ACCEPT, maxBytes: MAX_ARTICLE_BYTES })
+}
+
 function secretQueryParamNames() {
   return {
     access_token: true,
@@ -2071,6 +2109,10 @@ if (typeof module !== "undefined" && module.exports) {
     hasSecretQueryParams: hasSecretQueryParams,
     isSecretQueryParamName: isSecretQueryParamName,
     maxFeedBytes: maxFeedBytes,
+    curlFetchCommand: curlFetchCommand,
+    feedFetchCommand: feedFetchCommand,
+    articleFetchCommand: articleFetchCommand,
+    MAX_ARTICLE_BYTES: MAX_ARTICLE_BYTES,
     splitFetchedBody: splitFetchedBody,
     isFeedTextResponse: isFeedTextResponse,
     emptyPanelCopy: emptyPanelCopy,

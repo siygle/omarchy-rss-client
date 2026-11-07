@@ -10,3 +10,5 @@ Discovery is bounded so a hostile or catch-all HTML endpoint cannot grow the fet
 - Once one candidate parses as a feed, the subscription's remaining candidates are skipped.
 
 A refresh therefore makes at most 6 requests per subscription. Articles from a discovered feed are stored under the subscription URL, so they keep the subscription's title and category.
+
+Each request is exactly one transfer. A discovered href is remote input, so curl runs with `-q --globoff` and the URL is passed once through `--url` (see `curlFetchCommand` in `Model.js`). Otherwise curl's URL globbing would expand `[1-100000]` or `{a,b,…}` into thousands of transfers. `--max-filesize` bounds each transfer, not their sum, so the output the shell collects would have no limit. `-q` also keeps `~/.curlrc` from turning globbing back on.
