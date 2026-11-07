@@ -28,6 +28,7 @@ If you just installed Omarchy RSS Client and the bar icon is not visible:
 - **Feed Format**: Omarchy RSS Client supports RSS 2.0 and Atom 1.0 specifications.
 - **HTML Autodiscovery**: If you entered a standard website or blog URL (e.g. `https://example.com/blog`), Omarchy RSS Client attempts to find linked RSS/Atom feeds automatically. If autodiscovery fails, find and enter the direct RSS feed URL.
 - **Feed Size Limits**: Feeds larger than 2 MiB are skipped to keep memory usage low.
+- **Article Text Limits**: Feed text is bounded so a hostile feed cannot stall the shell: titles are cut to 500 characters, excerpts to 20,000, feed names to 300, and full article text to 200,000. An item whose `guid` or `link` identity is longer than 2,048 characters is skipped.
 
 ---
 
