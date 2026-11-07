@@ -749,3 +749,82 @@ test("OPML regression test: malicious HTML tags and remote images in outline tex
 });
 
 
+
+function hostileNestedOpml(depth, feeds) {
+  const open = '<outline text="c">'.repeat(depth);
+  const close = "</outline>".repeat(depth);
+  let body = "";
+  for (let i = 0; i < feeds; i++) body += `<outline xmlUrl="https://example.com/${i}.xml"/>`;
+  return `<opml version="2.0"><body>${open}${body}${close}</body></opml>`;
+}
+
+test("OPML import bounds category nesting so deep folders cannot multiply per-feed work", () => {
+  // The marketplace review's shape: ~20,000 nested folders and ~20,000 feeds
+  // fit under the 5 MiB read limit and would copy 400 million path elements.
+  const text = hostileNestedOpml(20000, 20000);
+  assert.ok(Buffer.byteLength(text) < 5 * 1024 * 1024);
+  const started = Date.now();
+  const details = Model.parseOpmlDetails(text);
+  assert.ok(Date.now() - started < 5000, "hostile OPML parses quickly");
+  assert.equal(details.subscriptions.length, Model.MAX_OPML_FEEDS);
+  assert.equal(details.skippedCount, 20000 - Model.MAX_OPML_FEEDS);
+  let pathElements = 0;
+  for (const sub of details.subscriptions) {
+    assert.ok(sub.categoryPath.length <= Model.MAX_CATEGORY_DEPTH);
+    pathElements += sub.categoryPath.length;
+  }
+  assert.ok(pathElements <= Model.MAX_OPML_FEEDS * Model.MAX_CATEGORY_DEPTH);
+  const result = Model.calculateImportResult([], details, "hostile.opml");
+  assert.equal(result.imported, Model.MAX_OPML_FEEDS);
+  assert.equal(result.skipped, 20000 - Model.MAX_OPML_FEEDS);
+  assert.match(result.message, /skipped \(limit 1000 per import\)/);
+});
+
+test("OPML category stack stays balanced past the depth limit", () => {
+  const deep = '<outline text="x">'.repeat(Model.MAX_CATEGORY_DEPTH + 4);
+  const text = `<opml><body><outline text="Top">${deep}</outline>${"</outline>".repeat(Model.MAX_CATEGORY_DEPTH + 4)}` +
+    `<outline xmlUrl="https://example.com/after.xml"/></body></opml>`;
+  const details = Model.parseOpmlDetails(text);
+  assert.deepEqual(details.subscriptions.map((s) => s.categoryPath), [[]]);
+  const nested = Model.parseOpmlDetails(hostileNestedOpml(Model.MAX_CATEGORY_DEPTH + 10, 1));
+  assert.equal(nested.subscriptions[0].categoryPath.length, Model.MAX_CATEGORY_DEPTH);
+});
+
+test("OPML import deduplicates feed URLs while parsing", () => {
+  const text = `<opml><body>${'<outline text="A"><outline xmlUrl="https://example.com/same.xml"/></outline>'.repeat(50)}</body></opml>`;
+  const details = Model.parseOpmlDetails(text);
+  assert.equal(details.subscriptions.length, 1);
+  assert.equal(details.duplicateCount, 49);
+  assert.deepEqual(details.subscriptions[0].categoryPath, ["A"]);
+});
+
+test("OPML import clamps category names and feed titles", () => {
+  const long = "x".repeat(10000);
+  const details = Model.parseOpmlDetails(
+    `<opml><body><outline text="${long}"><outline title="${long}" xmlUrl="https://example.com/f.xml"/></outline></body></opml>`
+  );
+  const sub = details.subscriptions[0];
+  assert.equal(sub.categoryPath[0].length, Model.MAX_CATEGORY_NAME_LENGTH);
+  assert.equal(sub.title.length, Model.MAX_SUBSCRIPTION_TITLE_LENGTH);
+});
+
+test("stored subscriptions are clamped to the same category bounds", () => {
+  const subs = Model.normalizeSubscriptions([
+    { url: "https://example.com/f.xml", title: "t", categoryPath: Array.from({ length: 5000 }, (_, i) => `c${i}`) }
+  ]);
+  assert.equal(subs[0].categoryPath.length, Model.MAX_CATEGORY_DEPTH);
+  assert.equal(subs[0].category, `c${Model.MAX_CATEGORY_DEPTH - 1}`);
+});
+
+test("plain URL list imports share the per-import feed limit", () => {
+  const list = Array.from({ length: Model.MAX_OPML_FEEDS + 25 }, (_, i) => `https://example.com/${i}.xml`).join("\n");
+  const details = Model.parseImportDetails(list);
+  assert.equal(details.subscriptions.length, Model.MAX_OPML_FEEDS);
+  assert.equal(details.skippedCount, 25);
+});
+
+test("BarWidget routes every import through the bounded parser", () => {
+  const source = fs.readFileSync(new URL("../BarWidget.qml", import.meta.url), "utf8");
+  assert.equal((source.match(/Model\.parseImportDetails\(/g) || []).length, 2);
+  assert.doesNotMatch(source, /Model\.parseOpmlDetails\(/);
+});

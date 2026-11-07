@@ -236,11 +236,7 @@ BarWidget {
       }
       return
     }
-    var parseDetails = Model.parseOpmlDetails(raw)
-    if (!parseDetails.feeds.length) {
-      var parsed = Model.parseSharePayload(raw)
-      parseDetails = { feeds: parsed, subscriptions: Model.normalizeSubscriptions([], parsed), categories: [], invalidCount: 0, totalFound: parsed.length }
-    }
+    var parseDetails = Model.parseImportDetails(raw)
     var result = Model.calculateImportResult(root.configuredSubscriptions, parseDetails, "")
     root.lastImportResult = result
     root.lastImportMessage = result.message
@@ -839,11 +835,7 @@ BarWidget {
       }
       var content = String(opmlStdout.text || "")
       var filename = Model.filenameFromPath(opmlValidateAndReadProcess.sourcePath)
-      var parseDetails = Model.parseOpmlDetails(content)
-      if (!parseDetails.feeds.length) {
-        var parsed = Model.parseSharePayload(content)
-        parseDetails = { feeds: parsed, subscriptions: Model.normalizeSubscriptions([], parsed), categories: [], invalidCount: 0, totalFound: parsed.length }
-      }
+      var parseDetails = Model.parseImportDetails(content)
       var result = Model.calculateImportResult(root.configuredSubscriptions, parseDetails, filename)
       console.log("[omarchy-rss-client] parsed count: " + parseDetails.feeds.length + ", imported: " + result.imported + ", duplicates: " + result.duplicates + ", invalid: " + result.invalid)
       root.lastImportResult = result
