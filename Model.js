@@ -51,10 +51,15 @@ function recentListSize(value) {
   return Math.floor(n)
 }
 
+// Settings JSON can be edited by hand, so the per-feed cap has a ceiling well
+// above the largest UI choice (50).
+var MAX_ITEMS_PER_FEED = 200
+
 function maxItemsPerFeed(value) {
   var n = Number(value)
   if (value === undefined || value === null || value === "" || !isFinite(n)) return 10
   if (n < 1) return 1
+  if (n > MAX_ITEMS_PER_FEED) return MAX_ITEMS_PER_FEED
   return Math.floor(n)
 }
 
@@ -407,6 +412,9 @@ var MAX_CATEGORY_DEPTH = 8
 var MAX_CATEGORY_NAME_LENGTH = 200
 var MAX_SUBSCRIPTION_TITLE_LENGTH = 300
 var MAX_OPML_FEEDS = 1000
+// Total subscriptions across all imports and manual adds. Each refresh makes at
+// most 6 requests per subscription (ADR 0009), so this bounds one refresh.
+var MAX_SUBSCRIPTIONS = 1000
 
 function clampText(value, maxLength) {
   var s = String(value == null ? "" : value).trim()
@@ -439,7 +447,7 @@ function normalizeSubscriptions(rawSubscriptions, rawFeedUrls) {
 
   var existingMap = {}
   var out = []
-  for (var i = 0; i < subs.length; i++) {
+  for (var i = 0; i < subs.length && out.length < MAX_SUBSCRIPTIONS; i++) {
     var s = subs[i]
     if (s && typeof s === "object" && isHttpsUrl(s.url)) {
       var u = String(s.url || "").trim()
@@ -475,7 +483,7 @@ function normalizeSubscriptions(rawSubscriptions, rawFeedUrls) {
 
   // Migration from legacy rawFeedUrls
   var fallbackUrls = httpsFeedUrls(rawFeedUrls)
-  for (var j = 0; j < fallbackUrls.length; j++) {
+  for (var j = 0; j < fallbackUrls.length && out.length < MAX_SUBSCRIPTIONS; j++) {
     var url = fallbackUrls[j]
     if (!existingMap[url]) {
       var newSub = {
@@ -747,6 +755,9 @@ function addSubscription(subscriptions, inputUrl, inputTitle, inputCategory) {
       return { ok: false, error: "Already subscribed", subscriptions: list }
     }
   }
+  if (list.length >= MAX_SUBSCRIPTIONS) {
+    return { ok: false, error: "Subscription limit reached (" + MAX_SUBSCRIPTIONS + ")", subscriptions: list }
+  }
 
   var title = String(inputTitle || "").trim() || extractDomainTitle(url)
   var catInfo = normalizeCategorySelection(inputCategory, list)
@@ -867,8 +878,13 @@ function calculateImportResult(currentSubs, parsedResult, filename) {
 
   var added = []
   var duplicates = 0
+  var overLimit = 0
   for (var j = 0; j < incoming.length; j++) {
     if (!currentUrls[incoming[j].url]) {
+      if (current.length + added.length >= MAX_SUBSCRIPTIONS) {
+        overLimit++
+        continue
+      }
       added.push(incoming[j])
       currentUrls[incoming[j].url] = true
     } else {
@@ -880,12 +896,14 @@ function calculateImportResult(currentSubs, parsedResult, filename) {
   var parts = []
   if (added.length > 0) {
     parts.push("Imported " + added.length + " feed" + (added.length === 1 ? "" : "s") + nameLabel)
-  } else if (duplicates > 0) {
+  } else if (duplicates > 0 && overLimit === 0) {
     parts.push("All " + duplicates + " feed" + (duplicates === 1 ? "" : "s") + nameLabel + " already added")
+  } else if (overLimit > 0) {
+    parts.push("No feeds imported" + nameLabel)
   } else {
     parts.push("No valid feeds found" + nameLabel)
   }
-  if (duplicates > 0 && added.length > 0) {
+  if (duplicates > 0 && (added.length > 0 || overLimit > 0)) {
     parts.push(duplicates + " duplicate" + (duplicates === 1 ? "" : "s"))
   }
   if (invalidCount > 0) {
@@ -893,6 +911,9 @@ function calculateImportResult(currentSubs, parsedResult, filename) {
   }
   if (skippedCount > 0) {
     parts.push(skippedCount + " skipped (limit " + MAX_OPML_FEEDS + " per import)")
+  }
+  if (overLimit > 0) {
+    parts.push(overLimit + " not added (limit " + MAX_SUBSCRIPTIONS + " subscriptions)")
   }
   var message = parts.join(" · ")
   var nextSubs = mergeSubscriptions(current, added)
@@ -905,6 +926,7 @@ function calculateImportResult(currentSubs, parsedResult, filename) {
     duplicates: duplicates,
     invalid: invalidCount,
     skipped: skippedCount,
+    overLimit: overLimit,
     message: message,
     newSubscriptions: nextSubs,
     newFeeds: nextFeeds,
@@ -2188,6 +2210,8 @@ if (typeof module !== "undefined" && module.exports) {
     MAX_CATEGORY_NAME_LENGTH: MAX_CATEGORY_NAME_LENGTH,
     MAX_SUBSCRIPTION_TITLE_LENGTH: MAX_SUBSCRIPTION_TITLE_LENGTH,
     MAX_OPML_FEEDS: MAX_OPML_FEEDS,
+    MAX_SUBSCRIPTIONS: MAX_SUBSCRIPTIONS,
+    MAX_ITEMS_PER_FEED: MAX_ITEMS_PER_FEED,
     normalizeRetentionDays: normalizeRetentionDays,
     pruneArticlesByRetention: pruneArticlesByRetention,
     extractReadableText: extractReadableText,
