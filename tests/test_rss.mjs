@@ -39,6 +39,44 @@ test("missing pubDate sorts below dated items; newest first; N caps the list", (
   assert.equal(all[all.length - 1].identity, "no-date-1");
 });
 
+test("parseFeed with a cap keeps the same items mergeFeedArticles would", () => {
+  const capped = Model.parseFeed(fixture, 2);
+  assert.deepEqual(
+    capped.items.map((item) => item.identity),
+    ["https://example.com/newest", "older-1"]
+  );
+  const full = Model.parseFeed(fixture);
+  assert.deepEqual(
+    Model.mergeFeedArticles([], capped.items, "https://example.com/feed", 2, 36500, []),
+    Model.mergeFeedArticles([], full.items, "https://example.com/feed", 2, 36500, [])
+  );
+});
+
+test("RFC 822 dates match Date.parse without calling it", () => {
+  const dates = [
+    "Tue, 06 Oct 2026 00:00:00 GMT",
+    "Sun, 26 Jul 2026 11:40:00 UT",
+    "Mon, 5 Jan 2026 3:04:05 +0530",
+    "Thu, 01 Oct 2026 19:41:49 -0700",
+    "Tue, 06 Oct 2026 00:00:00 PDT",
+    "06 Oct 26 00:00 EST",
+    "Tue, 31 Feb 2026 00:00:00 GMT",
+  ];
+  for (const text of dates) {
+    assert.equal(Model.parseRfc822Date(text), Date.parse(text), text);
+    assert.equal(Model.parsePubDate(text), Date.parse(text), text);
+  }
+});
+
+test("dates outside the RFC 822 fast path fall back to Date.parse", () => {
+  for (const text of ["2026-04-20T00:00:00+09:00", "Tue, 06 Oct 2026 00:00:00", "Tue, 06 Oct 2026 00:00:00 XYZ"]) {
+    assert.equal(Model.parseRfc822Date(text), null, text);
+  }
+  assert.equal(Model.parsePubDate("2026-04-20T00:00:00+09:00"), Date.parse("2026-04-20T00:00:00+09:00"));
+  assert.equal(Model.parsePubDate("Tue, 06 Oct 2026 00:00:00"), Date.parse("Tue, 06 Oct 2026 00:00:00"));
+  assert.equal(Model.parsePubDate("not a date"), null);
+});
+
 test("row text strips HTML and does not keep tags", () => {
   const parsed = Model.parseRss20(fixture);
   const htmlOnly = parsed.items.find((item) => item.identity === "https://example.com/html-only");

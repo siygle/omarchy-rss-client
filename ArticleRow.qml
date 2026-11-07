@@ -94,9 +94,16 @@ Item {
         onClicked: root.toggleRead()
       }
 
-      PanelToolTip {
-        visible: markHover.containsMouse && text !== ""
-        text: root.isRead ? "Mark as unread" : "Mark as read"
+      // Tooltips are popups and cost as much as the rest of the row to
+      // create, so build them only while hovered; a page flip rebuilds
+      // every row.
+      Loader {
+        anchors.fill: parent
+        active: markHover.containsMouse
+        sourceComponent: PanelToolTip {
+          visible: markHover.containsMouse
+          text: root.isRead ? "Mark as unread" : "Mark as read"
+        }
       }
     }
 
@@ -123,9 +130,13 @@ Item {
         onClicked: root.openExternal()
       }
 
-      PanelToolTip {
-        visible: linkHover.containsMouse
-        text: "Open in browser"
+      Loader {
+        anchors.fill: parent
+        active: linkHover.containsMouse
+        sourceComponent: PanelToolTip {
+          visible: linkHover.containsMouse
+          text: "Open in browser"
+        }
       }
     }
   }
