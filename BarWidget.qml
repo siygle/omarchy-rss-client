@@ -412,20 +412,16 @@ BarWidget {
     var url = Model.activateUrl(item)
     var identity = Model.itemIdentity(item)
     if (!url || !identity || articleFetchProcess.running) return
+    var command = Model.articleFetchCommand(url)
     root.articleFetchIdentity = identity
+    if (!command.length) {
+      root.articleFetchStatus = "error"
+      injectPanel()
+      return
+    }
     root.articleFetchStatus = "loading"
     articleFetchProcess.currentIdentity = identity
-    articleFetchProcess.command = [
-      "curl", "-fsSL",
-      "--proto", "=https",
-      "--proto-redir", "=https",
-      "--max-redirs", "5",
-      "--max-filesize", "1048576",
-      "--max-time", "20",
-      "-A", "omarchy-rss-client/0.1.0",
-      "-H", "Accept: text/html, application/xhtml+xml, application/xml;q=0.9, text/plain;q=0.8",
-      url
-    ]
+    articleFetchProcess.command = command
     articleFetchProcess.running = true
     injectPanel()
   }
@@ -554,18 +550,7 @@ BarWidget {
         }
 
         w.currentEntry = next
-        w.command = [
-          "curl", "-fsSL",
-          "--proto", "=https",
-          "--proto-redir", "=https",
-          "--max-redirs", "5",
-          "--max-filesize", String(Model.maxFeedBytes()),
-          "--max-time", "20",
-          "-A", "omarchy-rss-client/0.1.0",
-          "-H", "Accept: application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.9, text/html;q=0.8",
-          "-w", "\n__OMARCHY_CT__:%{content_type}",
-          nextUrl
-        ]
+        w.command = Model.feedFetchCommand(nextUrl)
         w.running = true
         anyRunning = true
       }
