@@ -187,15 +187,16 @@ function parseState(text) {
   }
 }
 
+// Also applies the article bounds to state saved before they existed.
 function uniqueItems(items) {
   var list = recentList(items || [], (items && items.length) || 1)
   var seen = {}
   var out = []
   for (var i = 0; i < list.length; i++) {
     var id = itemIdentity(list[i])
-    if (!id || seen[id]) continue
-    seen[id] = true
-    out.push(list[i])
+    if (!id || id.length > MAX_ARTICLE_IDENTITY_LENGTH || seen["#" + id]) continue
+    seen["#" + id] = true
+    out.push(list[i] && typeof list[i] === "object" ? boundedArticle(list[i]) : list[i])
   }
   return out
 }
@@ -480,14 +481,19 @@ function parseOpmlStructured(text) {
   var skippedCount = 0
   var totalFound = 0
 
-  var tagRe = /<\/?outline\b([^>]*?)(\/?)>/gi
+  // `<outline ...>`, `<outline .../>` and `</outline>`, scanned linearly (see
+  // scanElements); an opening with no '>' after it ends the scan.
+  var tagRe = /<\/?outline\b/gi
   var match
 
   while ((match = tagRe.exec(raw))) {
-    var fullMatch = match[0]
-    var attrs = match[1] || ""
-    var isSelfClosing = match[2] === "/" || fullMatch.indexOf("/>") !== -1
-    var isClosingTag = fullMatch.indexOf("</outline") === 0
+    var gt = raw.indexOf(">", match.index + match[0].length)
+    if (gt === -1) break
+    tagRe.lastIndex = gt + 1
+    var attrs = raw.slice(match.index + match[0].length, gt)
+    var isSelfClosing = attrs.charAt(attrs.length - 1) === "/"
+    if (isSelfClosing) attrs = attrs.slice(0, -1)
+    var isClosingTag = match[0].charAt(1) === "/"
 
     if (isClosingTag) {
       if (openNamed.length > 0 && openNamed.pop()) namedPath.pop()
@@ -1340,14 +1346,24 @@ function serializeReadIdentities(ids) {
   return serializeFeedUrls(ids)
 }
 
+// Read sets grow with every article marked read, and isRead runs for every
+// row, badge, and category count. A lookup map built once per read-set array
+// keeps each check constant-time instead of a scan of the whole set.
+var readLookupCache = { list: null, length: -1, map: null }
+
+function readLookup(readSet) {
+  var list = readSet || []
+  if (readLookupCache.list === list && readLookupCache.length === list.length) return readLookupCache.map
+  var map = {}
+  for (var i = 0; i < list.length; i++) map["#" + String(list[i]).trim()] = true
+  readLookupCache = { list: list, length: list.length, map: map }
+  return map
+}
+
 function isRead(readSet, item) {
   var id = itemIdentity(item)
   if (!id) return false
-  var list = readSet || []
-  for (var i = 0; i < list.length; i++) {
-    if (String(list[i]).trim() === id) return true
-  }
-  return false
+  return readLookup(readSet)["#" + id] === true
 }
 
 function markRead(readSet, item) {
@@ -1374,8 +1390,15 @@ function compactCount(value) {
 
 function markAllRead(readSet, items) {
   var next = readIdentities(serializeReadIdentities(readSet))
+  var seen = {}
+  for (var s = 0; s < next.length; s++) seen["#" + next[s]] = true
   var list = items || []
-  for (var i = 0; i < list.length; i++) next = markRead(next, list[i])
+  for (var i = 0; i < list.length; i++) {
+    var id = itemIdentity(list[i])
+    if (!id || seen["#" + id]) continue
+    seen["#" + id] = true
+    next.push(id)
+  }
   return next
 }
 
@@ -1400,10 +1423,174 @@ function tabItems(items, readSet, tab) {
   return out
 }
 
+// Linear scanning. Feed bodies, article pages, and OPML files are untrusted.
+// A lazy `<tag ...>[\s\S]*?</tag>` or `<[^>]+>` regex rescans the rest of the
+// text from every opening that never closes, so a crafted 2 MiB body full of
+// unclosed tags is quadratic. These helpers only search forward from where
+// the previous search stopped, and stop at the first opening that cannot
+// close: a later opening has even less text left in which to find its '>' or
+// closing tag. Openings and closings pair the way the replaced regexes did.
+var SCAN_PATTERNS = {}
+
+function scanPattern(source) {
+  if (!SCAN_PATTERNS[source]) SCAN_PATTERNS[source] = new RegExp(source, "gi")
+  return SCAN_PATTERNS[source]
+}
+
+function openingPattern(tag) {
+  return scanPattern("<" + tag + "\\b")
+}
+
+function closingPattern(tag, allowSpace) {
+  return scanPattern("</" + tag + (allowSpace ? "\\s*>" : ">"))
+}
+
+function findFrom(pattern, source, from) {
+  pattern.lastIndex = from
+  return pattern.exec(source)
+}
+
+// Calls visit(start, contentStart, contentEnd, end) for each element in order,
+// pairing each opening with the first closing tag after it; the next search
+// starts after that closing tag. With `afterOpenTag` the content starts after
+// the opening tag's '>' (`<tag\b[^>]*>([\s\S]*?)</tag\s*>`); without it the
+// element is `<tag\b[\s\S]*?</tag>`. visit returns false to stop.
+// `accept(openingTag)` may skip an opening; the search then resumes after its
+// '>', so an accepted element nested inside a skipped one is still found.
+function scanElements(source, tag, options, visit) {
+  var afterOpenTag = options && options.afterOpenTag === true
+  var accept = options && options.accept
+  var close = closingPattern(tag, options && options.allowSpace === true)
+  var open = openingPattern(tag)
+  var from = 0
+  while (from <= source.length) {
+    var o = findFrom(open, source, from)
+    if (!o) return
+    var contentStart = o.index + o[0].length
+    if (afterOpenTag) {
+      var gt = source.indexOf(">", contentStart)
+      if (gt === -1) return
+      if (accept && !accept(source.slice(o.index, gt + 1))) {
+        from = gt + 1
+        continue
+      }
+      contentStart = gt + 1
+    }
+    var c = findFrom(close, source, contentStart)
+    if (!c) return
+    var end = c.index + c[0].length
+    if (visit(o.index, contentStart, c.index, end) === false) return
+    from = end
+  }
+}
+
+// Calls visit(start, nameEnd, end) for each opening tag `<tag\b[^>]*>` in
+// order; the next search starts after its '>'. visit returns false to stop.
+function scanOpeningTags(source, tag, visit) {
+  var open = openingPattern(tag)
+  var from = 0
+  while (from <= source.length) {
+    var o = findFrom(open, source, from)
+    if (!o) return
+    var gt = source.indexOf(">", o.index + o[0].length)
+    if (gt === -1) return
+    if (visit(o.index, o.index + o[0].length, gt + 1) === false) return
+    from = gt + 1
+  }
+}
+
+function elementBlocks(source, tag) {
+  var blocks = []
+  scanElements(source, tag, null, function(start, contentStart, contentEnd, end) {
+    blocks.push(source.slice(start, end))
+  })
+  return blocks
+}
+
+function removeElements(source, tag, allowSpace) {
+  var parts = []
+  var from = 0
+  scanElements(source, tag, { allowSpace: allowSpace }, function(start, contentStart, contentEnd, end) {
+    parts.push(source.slice(from, start), " ")
+    from = end
+  })
+  if (!parts.length) return source
+  parts.push(source.slice(from))
+  return parts.join("")
+}
+
+function openingTags(source, tag) {
+  var tags = []
+  scanOpeningTags(source, tag, function(start, nameEnd, end) {
+    tags.push(source.slice(start, end))
+  })
+  return tags
+}
+
+// True when the text after some `<tag` opening, up to its first '>' (or the
+// end of the text when there is none), matches attributePattern. Like
+// `<tag\b[^>]*attributePattern`, provided the pattern cannot match '>'.
+function hasOpeningTagMatching(source, tag, attributePattern) {
+  var open = openingPattern(tag)
+  var from = 0
+  while (from <= source.length) {
+    var o = findFrom(open, source, from)
+    if (!o) return false
+    var nameEnd = o.index + o[0].length
+    var gt = source.indexOf(">", nameEnd)
+    if (attributePattern.test(source.slice(nameEnd, gt === -1 ? source.length : gt))) return true
+    if (gt === -1) return false
+    from = gt + 1
+  }
+  return false
+}
+
+var CDATA_OPEN = "<![CDATA["
+var CDATA_CLOSE = "]]>"
+
 function stripCdata(text) {
   var value = String(text || "")
-  var wrapped = value.match(/^<!\[CDATA\[([\s\S]*?)\]\]>$/)
-  return wrapped ? wrapped[1] : value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+  if (value.indexOf(CDATA_OPEN) === -1) return value
+  if (value.length >= CDATA_OPEN.length + CDATA_CLOSE.length
+      && value.indexOf(CDATA_OPEN) === 0
+      && value.lastIndexOf(CDATA_CLOSE) === value.length - CDATA_CLOSE.length) {
+    return value.slice(CDATA_OPEN.length, value.length - CDATA_CLOSE.length)
+  }
+  var parts = []
+  var from = 0
+  while (true) {
+    var open = value.indexOf(CDATA_OPEN, from)
+    if (open === -1) break
+    var close = value.indexOf(CDATA_CLOSE, open + CDATA_OPEN.length)
+    if (close === -1) break
+    parts.push(value.slice(from, open), value.slice(open + CDATA_OPEN.length, close))
+    from = close + CDATA_CLOSE.length
+  }
+  parts.push(value.slice(from))
+  return parts.join("")
+}
+
+// Replaces each `<[^>]+>` with a space.
+function stripTags(text) {
+  var parts = []
+  var from = 0
+  var pos = 0
+  while (true) {
+    var lt = text.indexOf("<", pos)
+    if (lt === -1) break
+    var gt = text.indexOf(">", lt + 1)
+    if (gt === -1) break
+    if (gt === lt + 1) {
+      pos = gt
+      continue
+    }
+    parts.push(text.slice(from, lt), " ")
+    from = gt + 1
+    pos = from
+  }
+  if (!parts.length) return text
+  parts.push(text.slice(from))
+  return parts.join("")
 }
 
 function decodeEntities(text) {
@@ -1417,17 +1604,20 @@ function decodeEntities(text) {
 }
 
 function stripHtml(text) {
-  return decodeEntities(stripCdata(text))
-    .replace(/<[^>]+>/g, " ")
+  return stripTags(decodeEntities(stripCdata(text)))
     .replace(/\s+/g, " ")
     .replace(/\s+([.,!?;:])/g, "$1")
     .trim()
 }
 
 function tagInner(block, tag) {
-  var pattern = new RegExp("<" + tag + "\\b[^>]*>([\\s\\S]*?)</" + tag + "\\s*>", "i")
-  var match = String(block || "").match(pattern)
-  return match ? match[1] : ""
+  var source = String(block || "")
+  var inner = ""
+  scanElements(source, tag, { afterOpenTag: true, allowSpace: true }, function(start, contentStart, contentEnd) {
+    inner = source.slice(contentStart, contentEnd)
+    return false
+  })
+  return inner
 }
 
 var RFC822_MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 }
@@ -1461,9 +1651,12 @@ function parseRfc822Date(text) {
   return date.getTime() - offset * 60000
 }
 
+// Longest date text worth parsing; real RSS and Atom dates are under 40.
+var MAX_DATE_TEXT_LENGTH = 128
+
 function parsePubDate(text) {
   var raw = stripHtml(text)
-  if (!raw) return null
+  if (!raw || raw.length > MAX_DATE_TEXT_LENGTH) return null
   var ms = parseRfc822Date(raw)
   if (ms === null) ms = Date.parse(raw)
   if (!isFinite(ms)) return null
@@ -1476,7 +1669,7 @@ function attributeValue(tag, name) {
 }
 
 function alternateLink(block) {
-  var tags = String(block || "").match(/<link\b[^>]*>/gi) || []
+  var tags = openingTags(String(block || ""), "link")
   var fallback = ""
   for (var i = 0; i < tags.length; i++) {
     var href = attributeValue(tags[i], "href")
@@ -1572,22 +1765,23 @@ function resolveUrl(base, href) {
 var MAX_DISCOVERED_FEEDS_PER_PAGE = 5
 
 function discoverFeedUrls(html, pageUrl) {
-  var tags = String(html || "").match(/<link\b[^>]*>/gi) || []
+  var source = String(html || "")
   var found = []
-  for (var i = 0; i < tags.length && found.length < MAX_DISCOVERED_FEEDS_PER_PAGE; i++) {
-    var tag = tags[i]
+  scanOpeningTags(source, "link", function(start, nameEnd, end) {
+    var tag = source.slice(start, end)
     var rel = attributeValue(tag, "rel").toLowerCase()
     var type = attributeValue(tag, "type").toLowerCase()
     var href = attributeValue(tag, "href")
     var isFeedType = type.indexOf("rss+xml") !== -1 || type.indexOf("atom+xml") !== -1
     var isAlternate = rel.indexOf("alternate") !== -1
-    if (!href || !isFeedType || !isAlternate) continue
+    if (!href || !isFeedType || !isAlternate) return true
     var absolute = resolveUrl(pageUrl, href)
-    if (!isHttpsUrl(absolute)) continue
+    if (!isHttpsUrl(absolute)) return true
     var seen = false
     for (var j = 0; j < found.length; j++) if (found[j] === absolute) seen = true
     if (!seen) found.push(absolute)
-  }
+    return found.length < MAX_DISCOVERED_FEEDS_PER_PAGE
+  })
   return found
 }
 
@@ -1627,18 +1821,46 @@ function discoveryEntries(entry, candidateUrls, visited) {
   return out
 }
 
+// A feed is untrusted and its items are kept in state.json, searched, and
+// drawn by every list. Bound each text field of an article: a 2 MiB guid,
+// title, or description would otherwise be copied into every view and save.
+// An identity longer than this is not a real one: the item is omitted, as one
+// with no identity is (ADR 0002). An overlong link is dropped rather than
+// shortened into a different URL.
+var MAX_ARTICLE_IDENTITY_LENGTH = 2048
+var MAX_ARTICLE_TITLE_LENGTH = 500
+var MAX_ARTICLE_EXCERPT_LENGTH = 20000
+var MAX_FEED_NAME_LENGTH = 300
+
+function boundedArticle(article) {
+  var link = String(article.link || "")
+  article.link = link.length > MAX_ARTICLE_IDENTITY_LENGTH ? "" : link
+  article.title = clampText(article.title, MAX_ARTICLE_TITLE_LENGTH)
+  article.excerpt = clampText(article.excerpt, MAX_ARTICLE_EXCERPT_LENGTH)
+  article.feedName = clampText(article.feedName, MAX_FEED_NAME_LENGTH)
+  return article
+}
+
 function parseAtom(xml, maxItems) {
   var source = String(xml || "")
   if (!/<feed\b/i.test(source)) return { ok: false, feedName: "", items: [] }
 
-  var entries = source.match(/<entry\b[\s\S]*?<\/entry>/gi) || []
-  var withoutEntries = source.replace(/<entry\b[\s\S]*?<\/entry>/gi, "")
+  var entries = []
+  var outside = []
+  var outsideFrom = 0
+  scanElements(source, "entry", null, function(start, contentStart, contentEnd, end) {
+    entries.push(source.slice(start, end))
+    outside.push(source.slice(outsideFrom, start))
+    outsideFrom = end
+  })
+  outside.push(source.slice(outsideFrom))
+  var withoutEntries = outside.join("")
   var feedName = stripHtml(tagInner(withoutEntries, "title"))
   var candidates = []
   for (var i = 0; i < entries.length; i++) {
     var block = entries[i]
     var identity = stripHtml(tagInner(block, "id")) || alternateLink(block)
-    if (!identity) continue
+    if (!identity || identity.length > MAX_ARTICLE_IDENTITY_LENGTH) continue
     var published = parsePubDate(tagInner(block, "published"))
     if (published == null) published = parsePubDate(tagInner(block, "updated"))
     candidates.push({ block: block, identity: identity, pubDateMs: published })
@@ -1647,16 +1869,16 @@ function parseAtom(xml, maxItems) {
   var kept = keepRecentCandidates(candidates, maxItems)
   for (var k = 0; k < kept.length; k++) {
     var entry = kept[k].block
-    items.push({
+    items.push(boundedArticle({
       identity: kept[k].identity,
       link: alternateLink(entry),
       title: stripHtml(tagInner(entry, "title")),
       excerpt: stripHtml(tagInner(entry, "content")) || stripHtml(tagInner(entry, "summary")),
       feedName: feedName,
       pubDateMs: kept[k].pubDateMs
-    })
+    }))
   }
-  return { ok: true, feedName: feedName, items: items }
+  return { ok: true, feedName: clampText(feedName, MAX_FEED_NAME_LENGTH), items: items }
 }
 
 // Stripping item bodies dominates parse time and only the newest
@@ -1677,38 +1899,54 @@ function parseFeed(xml, maxItems) {
 
 function parseRss20(xml, maxItems) {
   var source = String(xml || "")
-  var hasRss20 = /<rss\b[^>]*version\s*=\s*["']2\.0["']/i.test(source)
-  var hasAtomFeed = /<feed\b[^>]*xmlns\s*=\s*["'][^"']*Atom/i.test(source) || /<feed\b[^>]*xmlns\s*=\s*["']http:\/\/www\.w3\.org\/2005\/Atom["']/i.test(source)
+  var hasRss20 = hasOpeningTagMatching(source, "rss", /version\s*=\s*["']2\.0["']/i)
+  var hasAtomFeed = hasOpeningTagMatching(source, "feed", /xmlns\s*=\s*["'][^"']*Atom/i)
   if (!hasRss20 || hasAtomFeed) {
     return { ok: false, feedName: "", items: [] }
   }
 
-  var channel = (source.match(/<channel\b[\s\S]*<\/channel>/i) || [source])[0]
+  var channel = channelText(source)
   var feedName = stripHtml(tagInner(channel, "title"))
-  var itemBlocks = channel.match(/<item\b[\s\S]*?<\/item>/gi) || []
+  var itemBlocks = elementBlocks(channel, "item")
   var candidates = []
   for (var i = 0; i < itemBlocks.length; i++) {
     var block = itemBlocks[i]
     var guid = stripHtml(tagInner(block, "guid"))
     var link = stripHtml(tagInner(block, "link"))
     var identity = guid || link
-    if (!identity) continue
+    if (!identity || identity.length > MAX_ARTICLE_IDENTITY_LENGTH) continue
     candidates.push({ block: block, identity: identity, link: link, pubDateMs: parsePubDate(tagInner(block, "pubDate")) })
   }
   var items = []
   var kept = keepRecentCandidates(candidates, maxItems)
   for (var k = 0; k < kept.length; k++) {
     var item = kept[k].block
-    items.push({
+    items.push(boundedArticle({
       identity: kept[k].identity,
       link: kept[k].link,
       title: stripHtml(tagInner(item, "title")),
       excerpt: stripHtml(tagInner(item, "description")),
       feedName: feedName,
       pubDateMs: kept[k].pubDateMs
-    })
+    }))
   }
-  return { ok: true, feedName: feedName, items: items }
+  return { ok: true, feedName: clampText(feedName, MAX_FEED_NAME_LENGTH), items: items }
+}
+
+// From the first <channel> opening to the last </channel>, like the greedy
+// `<channel\b[\s\S]*<\/channel>`; the whole source when there is none.
+function channelText(source) {
+  var open = findFrom(openingPattern("channel"), source, 0)
+  if (!open) return source
+  var close = closingPattern("channel", false)
+  var end = -1
+  var from = open.index + open[0].length
+  var c
+  while ((c = findFrom(close, source, from))) {
+    end = c.index + c[0].length
+    from = end
+  }
+  return end === -1 ? source : source.slice(open.index, end)
 }
 
 function recentList(items, n) {
@@ -1731,35 +1969,41 @@ function recentList(items, n) {
   return copy.slice(0, size)
 }
 
+// Full article text is laid out as one plain-text block in the reader; a
+// page of a megabyte of text would stall the shell while it is shaped. This
+// is far beyond any real article (about 30,000 words).
+var MAX_READABLE_TEXT_LENGTH = 200000
+
 function extractReadableText(html) {
   var source = String(html || "")
   if (!source) return ""
-  source = source
-    .replace(/<script\b[\s\S]*?<\/script\s*>/gi, " ")
-    .replace(/<style\b[\s\S]*?<\/style\s*>/gi, " ")
-    .replace(/<noscript\b[\s\S]*?<\/noscript\s*>/gi, " ")
-    .replace(/<svg\b[\s\S]*?<\/svg\s*>/gi, " ")
-    .replace(/<nav\b[\s\S]*?<\/nav\s*>/gi, " ")
-    .replace(/<footer\b[\s\S]*?<\/footer\s*>/gi, " ")
-    .replace(/<aside\b[\s\S]*?<\/aside\s*>/gi, " ")
+  var removed = ["script", "style", "noscript", "svg", "nav", "footer", "aside"]
+  for (var r = 0; r < removed.length; r++) source = removeElements(source, removed[r], true)
 
   var candidates = []
-  var patterns = [
-    /<article\b[^>]*>([\s\S]*?)<\/article\s*>/gi,
-    /<main\b[^>]*>([\s\S]*?)<\/main\s*>/gi,
-    /<div\b[^>]*(?:class|id)=["'][^"']*(?:post|article|content|entry)[^"']*["'][^>]*>([\s\S]*?)<\/div\s*>/gi,
-    /<body\b[^>]*>([\s\S]*?)<\/body\s*>/gi
-  ]
-  for (var p = 0; p < patterns.length; p++) {
-    var match
-    while ((match = patterns[p].exec(source)) !== null) {
-      var text = stripHtml(match[1])
-      if (text.length > 120) candidates.push(text)
-    }
+  function collect(start, contentStart, contentEnd) {
+    var text = stripHtml(source.slice(contentStart, contentEnd))
+    if (text.length > 120) candidates.push(text)
   }
-  if (candidates.length === 0) return stripHtml(source)
+  scanElements(source, "article", { afterOpenTag: true, allowSpace: true }, collect)
+  scanElements(source, "main", { afterOpenTag: true, allowSpace: true }, collect)
+  scanElements(source, "div", { afterOpenTag: true, allowSpace: true, accept: isContentDivTag }, collect)
+  scanElements(source, "body", { afterOpenTag: true, allowSpace: true }, collect)
+  if (candidates.length === 0) return clampText(stripHtml(source), MAX_READABLE_TEXT_LENGTH)
   candidates.sort(function(a, b) { return b.length - a.length })
-  return candidates[0]
+  return clampText(candidates[0], MAX_READABLE_TEXT_LENGTH)
+}
+
+// A <div> whose class or id names post, article, content, or entry.
+function isContentDivTag(tag) {
+  var attr = /(?:class|id)=["']([^"']*)["']/gi
+  var m
+  while ((m = attr.exec(tag))) {
+    if (/post|article|content|entry/i.test(m[1])) return true
+    // Retry from just after this match's start, as the regex engine would.
+    attr.lastIndex = m.index + 1
+  }
+  return false
 }
 
 function readerFontSize(value) {
@@ -1894,6 +2138,11 @@ if (typeof module !== "undefined" && module.exports) {
     MIN_RETENTION_DAYS: MIN_RETENTION_DAYS,
     MAX_RETENTION_DAYS: MAX_RETENTION_DAYS,
     MAX_CATEGORY_DEPTH: MAX_CATEGORY_DEPTH,
+    MAX_ARTICLE_IDENTITY_LENGTH: MAX_ARTICLE_IDENTITY_LENGTH,
+    MAX_ARTICLE_TITLE_LENGTH: MAX_ARTICLE_TITLE_LENGTH,
+    MAX_ARTICLE_EXCERPT_LENGTH: MAX_ARTICLE_EXCERPT_LENGTH,
+    MAX_FEED_NAME_LENGTH: MAX_FEED_NAME_LENGTH,
+    MAX_READABLE_TEXT_LENGTH: MAX_READABLE_TEXT_LENGTH,
     MAX_CATEGORY_NAME_LENGTH: MAX_CATEGORY_NAME_LENGTH,
     MAX_SUBSCRIPTION_TITLE_LENGTH: MAX_SUBSCRIPTION_TITLE_LENGTH,
     MAX_OPML_FEEDS: MAX_OPML_FEEDS,
